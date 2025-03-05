@@ -16,8 +16,8 @@ r+ (resp. r∗).
 -/
 inductive RStar {α : Type} : Prop -> Prop
 where
-  | base (a b : α) : Rel a b -> RStar (Rel a b) -- We should contains relation itself
-  | refl (a : α) : RStar (Rel a a)
+  | base (a b : α) (h : a ≠ b) : Rel a b -> RStar (Rel a b) -- We should contains relation itself
+  -- | refl (a : α) : RStar (Rel a a)
   | trans (a b c : α) : Rel a b -> Rel b c -> RStar (Rel a c)
 
 /-
@@ -31,24 +31,31 @@ notation (priority := high) r₁ ";" r₂ => Rel.seq r₁ r₂
 def test_seq := (Rel.base 1 2 (by decide)) ; (Rel.base 2 3 (by decide))
 #check test_seq
 
+-- Check if clusore fullfill the reflexive.
+-- def test_star := RStar.refl 1
+-- #check test_star
+
 /-
 -/
-structure Event :=
-  id : ℕ
-  thread : T -- Thread that holds the current instruction.
-  PC : ℕ -- Program Counter or Line number for executing instruction.
-  action : Action
+inductive Event : Type
+where
+  | mk : Event
+
+theorem EventIsUnique (e₁ e₂ : Event) :
+  e₁ ≠ e₂ := sorry
 
 /-
 We define a Relation as α -> α -> Prop
 Executions are tuples (E, po, rf, co), which consist of a set of events E,
 giving a semantics to the instructions, and three relations over events: po, rf, and co
 -/
-structure Excution :=
-  -- E: Set
-  -- po: Event -> Event -> Prop
-  -- rf: Event -> Event -> Prop
-  fr: Event -> Event -> Prop
+inductive Excution {e₁ e₂ : Event} (R : Rel e₁ e₂) : Type
+where
+  | po: Excution (Rel.base e₁ e₂ (by apply EventIsUnique)) -- Try to define that the event is unique.
+  | rf: Excution (Rel.base e₁ e₂ (by apply EventIsUnique))
+  | fr: Excution (Rel.base e₁ e₂ (by apply EventIsUnique))
+
+-- def mk (e : Event) : Excution := {E := ∅, po := Unit, rf := e, fr := e}
 
 /-
 Actions now have two types: read and write.
@@ -62,3 +69,9 @@ inductive Action (a : α) (v : ℕ) : Type where
 
 #check Thread 1
 #check Event
+
+-- We write proc(e) for the thread holding the event e.
+inductive EventProp (e : Event) : Type
+where
+  | proc : EventProp e
+  | addr : EventProp e
