@@ -1,9 +1,5 @@
 inductive Thread (n : ℕ) where
   | t_id: Thread n
-
-
-
-
 /-
 Inductive predicates are used to prove something, so it has difference with inductive type.
 -/
@@ -18,11 +14,11 @@ where
 We denote the transitive (resp. reflexive-transitive) closure of a relation r as
 r+ (resp. r∗).
 -/
-inductive RStar {α : Type} (R : α -> α -> Prop) : α -> α → Prop
+inductive RStar {α : Type} : Prop -> Prop
 where
-  | base (a b : α) : R a b -> RStar R a b -- We should contains relation itself
-  | refl (a : α) : RStar R a a
-  | trans (a b c : α) : R a b -> R b c -> RStar R a c
+  | base (a b : α) : Rel a b -> RStar (Rel a b) -- We should contains relation itself
+  | refl (a : α) : RStar (Rel a a)
+  | trans (a b c : α) : Rel a b -> Rel b c -> RStar (Rel a c)
 
 /-
 This is used for expressing sequential composition.
@@ -31,6 +27,9 @@ notation (priority := high) r₁ ";" r₂ => Rel.seq r₁ r₂
 
 #check Rel.seq (Rel.base 1 2 (by decide)) (Rel.base 2 3 (by decide))
 #check (Rel.base 1 2 (by decide)) ; (Rel.base 2 3 (by decide))
+
+def test_seq := (Rel.base 1 2 (by decide)) ; (Rel.base 2 3 (by decide))
+#check test_seq
 
 /-
 -/
