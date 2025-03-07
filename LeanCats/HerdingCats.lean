@@ -171,4 +171,4 @@ where
 -- We define a communication as for all events e₁ and e₂, it should be po or rf or fr relations.
 def com (e₁ e₂ : Event) := Rel RoE.rf e₁ e₂ ∨ Rel RoE.fr e₁ e₂ ∨ Rel RoE.co e₁ e₂
 
-def acyclic := 1
+def acyclic := 0
