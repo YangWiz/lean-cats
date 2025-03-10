@@ -71,37 +71,16 @@ def r₃ := R.add 4 5 r₂
 
 def r := TransClosure r₃
 
-def R.irreflexive {α : Type} (set : Set (α × α)) :=
+def R.irreflexive {α : Type} (set : Set (α × α)) : Prop :=
   ¬ (∃x, (x, x) ∈ set)
 
-def R.acyclic {α : Type} (set : Set (α × α)) :=
-  ¬ (∃x, (x, x) ∈ TransClosure set)
-
--- theorem RelIsRstar {α : Type } {a b c d : α}:
-
-
--- #check Rel.seq (Rel.base 1 2 RoE.fr (by decide)) (Rel.base 2 3 RoE.fr (by decide))
--- #check (Rel.base 1 2 RoE.fr (by decide)) ; (Rel.base 2 3 RoE.fr (by decide))
---
--- def test_seq := (Rel.base 1 2 RoE.fr (by decide)) ; (Rel.base 2 3 RoE.fr (by decide))
--- #check test_seq
-
--- Check if clusore fullfill the reflexive.
--- def test_star := RStar.refl 1
--- #check test_star
+-- We chouldn't find a cycle after we find all the direct/undirect relations.
+def R.acyclic {α : Type} (set : Set (α × α)) : Prop :=
+  R.irreflexive (TransClosure set)
 
 axiom EventIsUnique (e₁ e₂ : Event) : e₁ ≠ e₂ -- Assume each id is different.
 
 #check Thread.mk 1
--- def mk (e : Event) : Excution := {E := ∅, po := Unit, rf := e, fr := e}
-
---  (w, r) ∈ WR means that w is a write and r a read.
--- inductive RWPair : Prop -> Prop
--- where
---   | WR (e₁ e₂ : Event) : RWPair (Rel e₁ e₂)
---   | RR (e₁ e₂ : Event) : RWPair (Rel e₁ e₂)
---   | WW (e₁ e₂ : Event) : RWPair (Rel e₁ e₂)
---   | RW (e₁ e₂ : Event) : RWPair (Rel e₁ e₂)
 
 def test_event : Event :=
 {
@@ -137,34 +116,6 @@ def test_event_2 : Event :=
 def po_new := R.mk test_event_1 test_event_2
 #check po_new
 
---def rr := Rel.base test_event test_event_1 (RoE.RR test_event test_event_1 (sorry))
---
---def RRpo {e₁ e₂ : Event} (h : isReadEvent e₁ ∧ isReadEvent e₂) := Rel RoE.po e₁ e₂ -> Rel (RoE.RR e₁ e₂ h) e₁ e₂
---#check RRpo (sorry)
-
--- We write po ∩ WR for the write-read pairs in program order
--- def po (e₁ e₂ : Event) := RoE.po e₁ e₂
--- def po_1 := po test_event test_event -- This can be used as an assumption.
-
--- #check po_1
-
--- #check Event
---
--- def rfe (e₁ e₂ : Event) :=
---   Rel RoE.rf e₁ e₂ ∧ e₁.t_id ≠ e₂.t_id
---
--- #check True
-
--- po\WR for all pairs in program order except the write-read pairs.
--- def test_poNWR (e₁ e₂ : Event) := RoE (Rel e₁ e₂) -> ¬ RWPair (Rel e₁ e₂)
--- #check test_poNWR test_event test_event
-
--- We write proc(e) for the thread holding the event e.
-inductive EventProp (e : Event) : Type
-where
-  | proc : EventProp e
-  | addr : EventProp e
-
 -- Playground
 -- We define a communication as for all events e₁ and e₂, it should be po or rf or fr relations.
 -- def com (e₁ e₂ : Event) := Rel RoE.rf e₁ e₂ ∨ Rel RoE.fr e₁ e₂ ∨ Rel RoE.co e₁ e₂
@@ -191,3 +142,25 @@ where
 -- where
 --   | base : Set (α × α)
 -- def a := Set (ℕ × ℕ)
+
+def addr (e : Event) : String :=
+  match e.a with
+  | Action.read addr' _ => addr'
+  | Action.write addr' _ => addr'
+
+/- instruction order lifted to events -/
+def po : Set (Event × Event) := R.empty
+/- links a write w to a read r taking its value from w -/
+def rf : Set (Event × Event) := R.empty
+/- total order over writes to the same memory location -/
+def co : Set (Event × Event) := R.empty
+
+def fr : Set (Event × Event) := R.empty
+
+/- program order restricted to the same memory location -/
+def po_loc : Set (Event × Event) :=
+  { (x, y) | (x, y) ∈ po ∧ addr x = addr y }
+
+/- links a read r to a write w′ co-after the write w from which r takes its value -/
+def com : Set (Event × Event) :=
+  fr ∪ rf ∪ co
