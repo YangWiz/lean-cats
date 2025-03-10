@@ -10,3 +10,5 @@ lean_lib «LeanCats» where
 @[default_target]
 lean_exe "lean-cats" where
   root := `Main
+
+require "leanprover-community" / "mathlib"

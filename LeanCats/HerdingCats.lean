@@ -1,4 +1,5 @@
 import Init.Data.List
+import Mathlib.Data.Set.Basic
 
 inductive Thread : Type where
   | mk: Nat -> Thread
@@ -29,58 +30,39 @@ def isReadEvent (e : Event) : Prop :=
 def isWriteEvent (e : Event) : Prop :=
   sorry
 
-/-
-For a given location x the coherence order is a total strict order on the write events to location x.
--/
+-- We define relation as a set.
+def R.mk {α : Type} (a b : α) : Set (α × α) := {(a, b)}
 
-/-
-We define a Relation as α -> α -> Prop
-Executions are tuples (E, po, rf, co), which consist of a set of events E,
-giving a semantics to the instructions, and three relations over events: po, rf, and co
-Relation over Events.
+def R.add {α : Type} (a b : α) (r : Set (α × α)) := (R.mk a b) ∪ r
 
-See Table II. Glossary of Relations.
--/
+def R.empty {α : Type} : Set (α × α) := {}
 
-inductive RoE : Prop
-where
-  -- Foundational relations
-  | po
-  | rf
-  | fr
-  -- Read write pair relations
-  | RR (e₁ e₂ : Event) (h : isReadEvent e₁ ∧ isReadEvent e₂) : RoE
-  | RW (e₁ e₂ : Event) (h : isReadEvent e₁ ∧ isWriteEvent e₂) : RoE
-  | WR (e₁ e₂ : Event) (h : isWriteEvent e₁ ∧ isReadEvent e₂) : RoE
-  | WW (e₁ e₂ : Event) (h : isWriteEvent e₁ ∧ isWriteEvent e₂) : RoE
-  -- Architectural order
-  | co
-  | comp : RoE -> RoE -> RoE
+def R.seq_comp {α : Type} (set₁ set₂ : Set (α × α)) : Set (α × α)
+    := { (x, y) | ∃z, (x, z) ∈ set₁ ∧ (z, y) ∈ set₂}
 
-/-
-This is used for expressing sequential composition.
--/
-notation (priority := high) r₁ ";" r₂ => RoE.comp r₁ r₂
+notation (priority := high) r₁ ";" r₂ => R.seq_comp r₁ r₂
 
-/-
-Inductive predicates are used to prove something, so it has difference with inductive type.
--/
-inductive Rel {α : Type} : RoE -> α -> α -> Prop
-where
-  | base (a b : α) (r : RoE) (h : a ≠ b) : Rel r a b
-  | seq_comp {r₁ r₂ : RoE} {a b c : α} : Rel r₁ a b -> Rel r₂ b c -> Rel (r₁;r₂) a c
-  -- We write irreflexive(r) to express the irreflexivity of r (i.e., ¬(∃x.(x, x) ∈ r))
-  -- There is no way to represent ∃x, (x, x) ∈ r, so it's irreflexivity indeed.
+-- Define a calculation of cloure in a very inefficient way.
+-- def R.closure {α : Type} [DecidableEq α] (set : Set (α × α)) : Set (α × α) :=
+--   let iterate (s : Set (α × α)) (a : α) : Set (α × α)  :=
+--     let s' := { (x, y) | ∃z, (x, z) ∈ set ∧ (z, y) ∈ set } ∪ s
+--     if (∀e, e ∈ s) then s else iterate s'
+--   iterate set
+
 
 /-
 We denote the transitive (resp. reflexive-transitive) closure of a relation r as
 r+ (resp. r∗).
 -/
-inductive RStar {α : Type} : Prop -> Prop
-where
-  | base (r : RoE) (a b : α) (h : a ≠ b)  : Rel r a b -> RStar (Rel r a b) -- We should contains relation itself
-  -- | refl (a : α) : RStar (Rel a a)
-  | trans (r : RoE) (a b c : α) : Rel r a b -> Rel r b c -> RStar (Rel r a c)
+inductive TransClosure {α : Type} (R : Set (α × α)) : α → α → Prop
+  | base {a b : α} : (a, b) ∈ R → TransClosure R a b
+  | trans {a b c : α} : TransClosure R a b → TransClosure R b c → TransClosure R a c
+
+def transitiveClosure {α : Type} (R : Set (α × α)) : Set (α × α) :=
+  { (a, b) | TransClosure R a b }
+
+def R.irreflexive {α : Type} (set : Set (α × α)) :=
+  ¬ (∃x, x ∈ transitiveClosure set)
 
 -- theorem RelIsRstar {α : Type } {a b c d : α}:
 
@@ -135,14 +117,17 @@ def test_event_2 : Event :=
   a := Action.read "" ""
 }
 
-def po₁ := Rel.base test_event test_event_1 RoE.po (by apply EventIsUnique)
-def po₂ := Rel.base test_event_1 test_event_2 RoE.po (by apply EventIsUnique)
-#check po₁
+-- def po₁ := Rel.base test_event test_event_1 RoE.po (by apply EventIsUnique)
+-- def po₂ := Rel.base test_event_1 test_event_2 RoE.po (by apply EventIsUnique)
+-- #check po₁
 
-def rr := Rel.base test_event test_event_1 (RoE.RR test_event test_event_1 (sorry))
+def po_new := R.mk test_event_1 test_event_2
+#check po_new
 
-def RRpo {e₁ e₂ : Event} (h : isReadEvent e₁ ∧ isReadEvent e₂) := Rel RoE.po e₁ e₂ -> Rel (RoE.RR e₁ e₂ h) e₁ e₂
-#check RRpo (sorry)
+--def rr := Rel.base test_event test_event_1 (RoE.RR test_event test_event_1 (sorry))
+--
+--def RRpo {e₁ e₂ : Event} (h : isReadEvent e₁ ∧ isReadEvent e₂) := Rel RoE.po e₁ e₂ -> Rel (RoE.RR e₁ e₂ h) e₁ e₂
+--#check RRpo (sorry)
 
 -- We write po ∩ WR for the write-read pairs in program order
 -- def po (e₁ e₂ : Event) := RoE.po e₁ e₂
@@ -150,12 +135,12 @@ def RRpo {e₁ e₂ : Event} (h : isReadEvent e₁ ∧ isReadEvent e₂) := Rel 
 
 -- #check po_1
 
-#check Event
-
-def rfe (e₁ e₂ : Event) :=
-  Rel RoE.rf e₁ e₂ ∧ e₁.t_id ≠ e₂.t_id
-
-#check True
+-- #check Event
+--
+-- def rfe (e₁ e₂ : Event) :=
+--   Rel RoE.rf e₁ e₂ ∧ e₁.t_id ≠ e₂.t_id
+--
+-- #check True
 
 -- po\WR for all pairs in program order except the write-read pairs.
 -- def test_poNWR (e₁ e₂ : Event) := RoE (Rel e₁ e₂) -> ¬ RWPair (Rel e₁ e₂)
@@ -169,6 +154,27 @@ where
 
 -- Playground
 -- We define a communication as for all events e₁ and e₂, it should be po or rf or fr relations.
-def com (e₁ e₂ : Event) := Rel RoE.rf e₁ e₂ ∨ Rel RoE.fr e₁ e₂ ∨ Rel RoE.co e₁ e₂
+-- def com (e₁ e₂ : Event) := Rel RoE.rf e₁ e₂ ∨ Rel RoE.fr e₁ e₂ ∨ Rel RoE.co e₁ e₂
+--
+-- def po_test₁ := Rel.base test_event test_event_1 RoE.po (by apply EventIsUnique)
+-- def po_test₂ := Rel.base test_event_1 test_event_2 RoE.po (by apply EventIsUnique)
+--
+-- def acyclic {roe₁ roe₂ : RoE} {e₁ e₂ e₃ : Event} (_ : Rel roe₁ e₁ e₂) (_ : Rel roe₂ e₂ e₃) :=
+--   Rel (RoE.comp roe₁ roe₂) e₁ e₃ -> e₁ ≠ e₃ -> True
+--
+-- def t₁ := acyclic po_test₁ po_test₂
+-- #check t₁
 
-def acyclic := 0
+-- First get all the sequential composition
+-- Get all the relations that are po-loc and com, then try to find all the acyclic(po-loc ∪ com)
+
+-- First we use a very naive implementation to check acyclic, every time we get a new relation from the
+-- source code
+-- The time complexity is O(n²). We create a working list, every time we got a new relation, we need to
+
+-- inductive Acyclic {} {Rel}
+
+-- inductive Relation {α : Type} : Type
+-- where
+--   | base : Set (α × α)
+-- def a := Set (ℕ × ℕ)
