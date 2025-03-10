@@ -49,20 +49,30 @@ notation (priority := high) r₁ ";" r₂ => R.seq_comp r₁ r₂
 --     if (∀e, e ∈ s) then s else iterate s'
 --   iterate set
 
+instance R.Decidable {α : Type} (s₁ s₂ : Set (α × α)) : Decidable (s₁ = s₂) :=
+  sorry
 
 /-
 We denote the transitive (resp. reflexive-transitive) closure of a relation r as
 r+ (resp. r∗).
 -/
-inductive TransClosure {α : Type} (R : Set (α × α)) : α → α → Prop
-  | base {a b : α} : (a, b) ∈ R → TransClosure R a b
-  | trans {a b c : α} : TransClosure R a b → TransClosure R b c → TransClosure R a c
+inductive RStar {α : Type} (set : Set (α × α)) : α → α → Prop
+| base {a b : α} : (a, b) ∈ set → RStar set a b
+| step {a b c : α} : RStar set a b → RStar set b c → RStar set a c
 
-def transitiveClosure {α : Type} (R : Set (α × α)) : Set (α × α) :=
-  { (a, b) | TransClosure R a b }
+def TransClosure {α : Type} (set : Set (α × α)) : Set (α × α) :=
+  { (a, b) | RStar set a b }
+
+#check {} = {}
+
+def r₁ := R.mk 1 2
+def r₂ := R.add 2 3 r₁
+def r₃ := R.add 4 5 r₂
+
+def r := TransClosure r₃
 
 def R.irreflexive {α : Type} (set : Set (α × α)) :=
-  ¬ (∃x, x ∈ transitiveClosure set)
+  ¬ (∃x, x ∈ TransClosure set)
 
 -- theorem RelIsRstar {α : Type } {a b c d : α}:
 
