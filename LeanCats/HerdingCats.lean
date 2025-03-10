@@ -72,7 +72,10 @@ def r₃ := R.add 4 5 r₂
 def r := TransClosure r₃
 
 def R.irreflexive {α : Type} (set : Set (α × α)) :=
-  ¬ (∃x, x ∈ TransClosure set)
+  ¬ (∃x, (x, x) ∈ set)
+
+def R.acyclic {α : Type} (set : Set (α × α)) :=
+  ¬ (∃x, (x, x) ∈ TransClosure set)
 
 -- theorem RelIsRstar {α : Type } {a b c d : α}:
 
