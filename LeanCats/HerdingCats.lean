@@ -116,33 +116,6 @@ def test_event_2 : Event :=
 def po_new := R.mk test_event_1 test_event_2
 #check po_new
 
--- Playground
--- We define a communication as for all events e₁ and e₂, it should be po or rf or fr relations.
--- def com (e₁ e₂ : Event) := Rel RoE.rf e₁ e₂ ∨ Rel RoE.fr e₁ e₂ ∨ Rel RoE.co e₁ e₂
---
--- def po_test₁ := Rel.base test_event test_event_1 RoE.po (by apply EventIsUnique)
--- def po_test₂ := Rel.base test_event_1 test_event_2 RoE.po (by apply EventIsUnique)
---
--- def acyclic {roe₁ roe₂ : RoE} {e₁ e₂ e₃ : Event} (_ : Rel roe₁ e₁ e₂) (_ : Rel roe₂ e₂ e₃) :=
---   Rel (RoE.comp roe₁ roe₂) e₁ e₃ -> e₁ ≠ e₃ -> True
---
--- def t₁ := acyclic po_test₁ po_test₂
--- #check t₁
-
--- First get all the sequential composition
--- Get all the relations that are po-loc and com, then try to find all the acyclic(po-loc ∪ com)
-
--- First we use a very naive implementation to check acyclic, every time we get a new relation from the
--- source code
--- The time complexity is O(n²). We create a working list, every time we got a new relation, we need to
-
--- inductive Acyclic {} {Rel}
-
--- inductive Relation {α : Type} : Type
--- where
---   | base : Set (α × α)
--- def a := Set (ℕ × ℕ)
-
 def addr (e : Event) : String :=
   match e.a with
   | Action.read addr' _ => addr'
@@ -157,6 +130,12 @@ def co : Set (Event × Event) := R.empty
 
 def fr : Set (Event × Event) := R.empty
 
+/-
+The function ppo, given an execution (E, po, co, rf), returns the preserved program
+order.
+-/
+def ppo : Set (Event × Event) := R.empty
+
 /- program order restricted to the same memory location -/
 def po_loc : Set (Event × Event) :=
   { (x, y) | (x, y) ∈ po ∧ addr x = addr y }
@@ -164,3 +143,27 @@ def po_loc : Set (Event × Event) :=
 /- links a read r to a write w′ co-after the write w from which r takes its value -/
 def com : Set (Event × Event) :=
   fr ∪ rf ∪ co
+
+/-
+The function fences returns the pairs of events in program order that are separated by
+a fence, when given an execution.
+-/
+def fences : Set (Event × Event) := R.empty
+
+def WR : Set (Event × Event) := R.empty
+
+/-
+We can only reorder WR in TSO, so other orders are preserved.
+TSO has a write buffer so that the write operations maybe propgated out of order.
+-/
+def TSO_ppo : Set (Event × Event) := po \ WR
+
+/-
+The function prop returns the pairs of writes ordered by the propagation order, given
+an execution.
+-/
+
+/-
+An example of SC
+  input data: (ppo, fences, prop)
+-/
