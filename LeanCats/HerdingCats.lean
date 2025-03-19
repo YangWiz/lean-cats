@@ -1,5 +1,6 @@
 import Init.Data.List
 import Mathlib.Data.Set.Basic
+import Mathlib.Data.Rel
 
 inductive Thread : Type where
   | mk: Nat -> Thread
@@ -23,6 +24,11 @@ structure Event :=
   (t : Thread)    -- Associated thread
   (ln : Nat)        -- Line number or position
   (a : Action) -- Action performed
+
+structure Event₁ :=
+  po : ℕ
+  rf : ℕ
+  fr : ℕ
 
 def isReadEvent (e : Event) : Prop :=
   sorry
@@ -121,8 +127,10 @@ def addr (e : Event) : String :=
   | Action.read addr' _ => addr'
   | Action.write addr' _ => addr'
 
+
 /- instruction order lifted to events -/
 def po : Set (Event × Event) := R.empty
+
 /- links a write w to a read r taking its value from w -/
 def rf : Set (Event × Event) := R.empty
 /- total order over writes to the same memory location -/
@@ -167,3 +175,14 @@ an execution.
 An example of SC
   input data: (ppo, fences, prop)
 -/
+
+-- A relation on natural numbers
+def lessThan : Rel Nat Nat := fun a b => a < b
+
+-- A relation on custom types
+structure Person where
+  name : String
+  age : Nat
+
+def olderThan : Rel Person Person := fun p q => p.age > q.age
+#check olderThan
