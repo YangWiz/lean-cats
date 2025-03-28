@@ -55,9 +55,6 @@ notation (priority := high) r₁ ";" r₂ => R.seq_comp r₁ r₂
 --     if (∀e, e ∈ s) then s else iterate s'
 --   iterate set
 
-instance R.Decidable {α : Type} (s₁ s₂ : Set (α × α)) : Decidable (s₁ = s₂) :=
-  sorry
-
 /-
 We denote the transitive (resp. reflexive-transitive) closure of a relation r as
 r+ (resp. r∗).
@@ -108,7 +105,7 @@ def test_event_1 : Event :=
 
 def test_event_2 : Event :=
 {
-  id := "1"
+  id := "2"
   t_id := 2
   t := Thread.mk 1
   ln := 4
@@ -170,6 +167,13 @@ def TSO_ppo : Set (Event × Event) := po \ WR
 The function prop returns the pairs of writes ordered by the propagation order, given
 an execution.
 -/
+def test₁ := R.add test_event test_event_1 po
+
+-- Example how we check if a relation is satisfied.
+theorem check_if_in : (test_event, test_event_1) ∈ test₁ :=
+  by
+    constructor
+    aesop
 
 /-
 An example of SC
