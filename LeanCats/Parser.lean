@@ -124,14 +124,21 @@ def mkName : Syntax -> MetaM Lean.Expr
 
 mutual -- mutual recursion.
 
--- partial def mkBinOp : Syntax -> Except String BinOp
---   | `(binOp | $t:dsl_term | $e:dsl_term) => BinOp.union <$> (mkTerm t) <*> (mkTerm e)
---   | `(binOp | $t:dsl_term & $e:dsl_term) => BinOp.inter <$> (mkTerm t) <*> (mkTerm e)
---   | `(binOp | $t:dsl_term ^ $e:dsl_term) => BinOp.diff <$> (mkTerm t) <*> (mkTerm e)
---   | _ => throw "Failed to parse BinOp"
+partial def mkBinOp : Syntax -> MetaM Lean.Expr
+  | `(binOp | $t:dsl_term | $e:dsl_term) => do
+    let lhs <- mkTerm t
+    let rhs <- mkTerm e
+    mkAppM ``BinOp.union #[lhs, rhs]
+  | `(binOp | $t:dsl_term & $e:dsl_term) => do
+    let lhs <- mkTerm t
+    let rhs <- mkTerm e
+    mkAppM ``BinOp.inter #[lhs, rhs]
+  | _ => throwUnsupportedSyntax
 
 partial def mkExpr : Syntax -> MetaM Lean.Expr
-  -- | `(expr| $e:binOp ) => Expr.binop <$> (mkBinOp e)
+  | `(expr| $e:binOp ) => do
+    let binop <- mkBinOp e
+    mkAppM ``Expr.binop #[binop]
   | `(expr| $t:dsl_term ) => do
     let t <- mkTerm t
     mkAppM ``Expr.term #[t]
@@ -204,10 +211,11 @@ elab m:model : term => do
   let b = amo
 
 def prog :=
-  let a = amo
-  let b = amo
+  let com = rf | fr
 
 #reduce prog
+
+#check check
 
 -- def mkAssignment : Syntax -> Except String Assignment
 --   | `(Assignment| let $n:name = $e:Expr ) => return (Stmt.assignment (mkExpr e.) (mkExpr e))
