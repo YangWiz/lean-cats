@@ -1,67 +1,213 @@
 import LeanCats.AST
+import LeanCats.HerdingCats
+import Mathlib.Data.Set.Basic
+import Init.Data.List.Basic
 
 open CatsAST
 open Lean Elab Meta
 
+/-
+  The cat language is much inspired by OCaml, featuring immutable bindings, first-class functions, pattern matching, etc.
+  However, cat is a domain specific language, with important differences from OCaml.
+
+  Base values are specialised, they are sets of events and relations over events.
+  There are also tags, akin to C enumerations or OCaml “constant” constructors and first class functions. Moreover, events can be extracted from sets and pair of events (element of relations) from relations.
+
+  There are two structured values: tuples of values and sets of values. One should notice that primitive set of events and structured set of events are not the same thing.
+  In fact, the language prevents the construction of structured set of events. Similarily, there are no structured sets of elements of relations, there are only relations.
+  There is a distinction between expressions that evaluate to some value, and instructions that are executed for their effect.
+
+  A model, or cat program is a sequence of instructions. At startup, pre-defined identifiers are bound to event sets and relations over events.
+  Those pre-defined identifiers describe a candidate execution (in the sense of the memory model). Executing the model means allowing or forbidding that candidate execution.
+
+  -- Identifiers.
+  -- Expressions.
+  -- Instructions.
+-/
+
 namespace Cats
 
 section
+declare_syntax_cat keyword
+-- Predefined sets.
+syntax "emptyset" : keyword -- empty set of events
+syntax "W" : keyword -- write events
+syntax "R" : keyword -- read events
+syntax "M" : keyword -- memory events, We have M = W ∪ R
+syntax "IW" : keyword -- initial writes, feed reads that read from the initial state
+syntax "FW" : keyword -- final writes, writes that are observed at the end of the test execution
+syntax "B" : keyword -- branch events
+syntax "RMW" : keyword -- read-modify-write events
+syntax "F" : keyword -- fence events
+
+-- Predefined relations.
+syntax "po" : keyword -- program order
+syntax "addr" : keyword -- address dependency
+syntax "data" : keyword -- data dependency
+syntax "ctrl" : keyword -- control dependency
+syntax "rmw" : keyword -- read-exclusive write-exclusive pair
+syntax "amo" : keyword -- atomic modify
+
+-- def elabkeyword : Syntax -> MetaM Expr
+--   | `(keyword | $n:num) => mkApp #[]
+
+def mkkeyword : Syntax -> MetaM Lean.Expr
+  | `(keyword|emptyset) => return .const ``Primitives.Events.empty []
+  | `(keyword|W) => return .const ``CatsAST.e.w []
+  | `(keyword|R) => return .const ``CatsAST.e.r []
+  | `(keyword|M) => return .const ``CatsAST.e.m []
+  | `(keyword|IW) => return .const ``CatsAST.e.iw []
+  | `(keyword|FW) => return .const ``CatsAST.e.fw []
+  | `(keyword|B) => return .const ``CatsAST.e.b []
+  | `(keyword|RMW) => return .const ``CatsAST.e.rmw []
+  | `(keyword|F) => return .const ``CatsAST.e.f []
+  | `(keyword|po) => return .const ``CatsAST.r.po []
+  | `(keyword|addr) => return .const ``CatsAST.r.addr []
+  | `(keyword|data) => return .const ``CatsAST.r.data []
+  | `(keyword|ctrl) => return .const ``CatsAST.r.ctrl []
+  | `(keyword|rmw) => return .const ``CatsAST.r.rmw []
+  | `(keyword|amo) => return .const ``CatsAST.r.amo []
+  | lit => mkAppM ``CatsAST.liter #[mkStrLit lit.getId.toString]
+
 declare_syntax_cat binOp
-declare_syntax_cat statement
+declare_syntax_cat instruction
 declare_syntax_cat expr
-declare_syntax_cat ident
 declare_syntax_cat binding
 declare_syntax_cat const
 declare_syntax_cat acyclic
 declare_syntax_cat qualified_name
 declare_syntax_cat dsl_term
-
-syntax binding : statement
-syntax expr : statement
+declare_syntax_cat comment
+declare_syntax_cat model
 
 syntax ident : qualified_name -- qualifed_name is just a identifier.
 
-syntax "let" qualified_name "=" expr : binding
-syntax qualified_name : dsl_term
+syntax keyword : dsl_term
+syntax binding : instruction
+syntax expr : instruction
+syntax acyclic : instruction
+syntax num : dsl_term
 
-syntax expr : dsl_term
-syntax "(" dsl_term ")" : expr
+syntax "acyclic" expr : acyclic
+syntax "let" qualified_name "=" expr : binding
+syntax qualified_name : expr
+syntax ident : dsl_term
+
+syntax "(" expr ")" : dsl_term
+syntax dsl_term : expr
 
 syntax num : const
 syntax str : const
+syntax binOp : expr
 
 syntax dsl_term "|" dsl_term: binOp
+syntax dsl_term "&" dsl_term: binOp
+syntax dsl_term "^" dsl_term: binOp
+syntax dsl_term "+" dsl_term: binOp
+syntax dsl_term "-" dsl_term: binOp
+
+-- syntax (comment+) : model
+syntax instruction* : model
 
 -- Embed the dsl into Lean
-syntax "[assignment|" binding "]" : term
+syntax "[instruction|" binding "]" : term
+
 syntax "[const|" const "]" : term
 syntax "[qualified_name|" qualified_name "]" : term
 syntax "[bin_or|" dsl_term "|" dsl_term : term
+syntax "[model|" model "]" : term
 
-def mkName : Syntax -> Except String QualifiedName
-  | `(qualified_name | $x:ident) => return QualifiedName.name x.getId.toString
-  | _ => throw "Failed to parse QualifedName"
+def mkName : Syntax -> MetaM Lean.Expr
+  | `(qualified_name | $x:ident) => do
+    mkAppM ``QualifiedName.name #[mkStrLit x.getId.toString]
+  | _ => throwUnsupportedSyntax
 
-def mkExpr : Syntax -> Except String Expr
-  | _ => throw "Failed to parse expr."
+mutual -- mutual recursion.
 
-def mkTerm : Syntax -> Except String CatsAST.Term
-  | `(dsl_term | $e:expr ) => CatsAST.Term.expr <$> (mkExpr e)
-  | `(dsl_term | $n:qualified_name ) => CatsAST.Term.name <$> (mkName n)
-  | _ => throw "Failed to parse Term"
+-- partial def mkBinOp : Syntax -> Except String BinOp
+--   | `(binOp | $t:dsl_term | $e:dsl_term) => BinOp.union <$> (mkTerm t) <*> (mkTerm e)
+--   | `(binOp | $t:dsl_term & $e:dsl_term) => BinOp.inter <$> (mkTerm t) <*> (mkTerm e)
+--   | `(binOp | $t:dsl_term ^ $e:dsl_term) => BinOp.diff <$> (mkTerm t) <*> (mkTerm e)
+--   | _ => throw "Failed to parse BinOp"
 
-def mkBinding : Syntax -> Except String Binding
-  | `(binding| let $n:qualified_name = $e:expr ) => Binding.varbinding <$> (mkName n) <*> (mkExpr e)
+partial def mkExpr : Syntax -> MetaM Lean.Expr
+  -- | `(expr| $e:binOp ) => Expr.binop <$> (mkBinOp e)
+  | `(expr| $t:dsl_term ) => do
+    let t <- mkTerm t
+    mkAppM ``Expr.term #[t]
+  | `(expr | $n:qualified_name ) => do
+    let n <- mkName n
+    mkAppM ``CatsAST.Term.name #[n]
+  | _ => throwUnsupportedSyntax
+
+partial def mkTerm : Syntax -> MetaM Lean.Expr
+  -- | `(dsl_term | ( $e:expr ) ) => CatsAST.Term.expr <$> (mkExpr e)
+  | `(dsl_term | $lit:ident ) => do
+    mkAppM ``CatsAST.Term.liter #[mkStrLit lit.getId.toString]
+  | `(dsl_term | $kw:keyword ) => do
+    let kw <- mkkeyword kw
+    mkAppM ``CatsAST.Term.keyword #[kw]
+  | _ => throwUnsupportedSyntax
+
+end
+
+def mkBinding : Syntax -> MetaM Lean.Expr
+  | `(binding| let $n:qualified_name = $e:expr ) => do
+    let n <- mkName n
+    let e <- mkExpr e
+    mkAppM ``Binding.varbinding #[n, e]
   -- TODO(Zhiyang) will implement pat binding (function binding) later.
-  | _ => throw "Failed to parse assignment."
+  | _ => throwUnsupportedSyntax
 
-def mkStatement : Syntax -> Except String Statement
-  | _ => throw "Failed to parse statement"
+-- def mkAcyclic : Syntax -> Except String Acyclic
+--   | `(acyclic| acyclic $e:expr ) => Acyclic.expr <$> (mkExpr e)
+--   | _ => throw "Failed to parse acyclic"
+--
+-- def mkInstruction : Syntax -> Except String Instruction
+--   -- | `(instruction| $b:binding) => Instruction.binding <$> (mkBinding b)
+--   | `(instruction| $e:expr ) => Instruction.expr <$> (mkExpr e)
+--   | `(instruction| $a:acyclic ) => Instruction.acyclic <$> (mkAcyclic a)
+--   | _ => throw "Failed to parse statement"
+--
+-- def mkConst : Syntax -> Except String Const
+--   | `(const| $x:num ) => return Const.num_lit x.getNat
+--   | `(const| $x:str ) => Const.str_lit <$> (mkName x)
+--   | _ => throw "Failed to parse const"
 
-def mkConst : Syntax -> Except String Const
-  | `(const| $x:num ) => return Const.num_lit x.getNat
-  | `(const| $x:str ) => Const.str_lit <$> (mkName x)
-  | _ => throw "Failed to parse const"
+-- def mkModel: Syntax -> Except String Model
+--   | `(model| $i:instruction* ) => sorry
+--   | `(model| $c:comment* ) => sorry
+--   | _ => throw "Invalid model syntax"
+
+def mkInstruction : Syntax -> MetaM Lean.Expr
+  | `(instruction| $b:binding) => do
+    let binding <- mkBinding b
+    mkAppM ``Instruction.binding #[binding]
+  -- | `(instruction| $e:expr ) => Instruction.expr <$> (mkExpr e)
+  -- | `(instruction| $a:acyclic ) => Instruction.acyclic <$> (mkAcyclic a)
+  | _ => throwUnsupportedSyntax
+
+#check foldlM
+#check List.map
+
+elab m:model : term => do
+  match m with
+  | `(model| $ins:instruction*) => do
+    let ins_list <- liftMetaM $ Array.mapM mkInstruction ins.raw
+
+    let instructions <- mkListLit (.const ``Instruction []) ins_list.toList
+    mkAppM ``CatsAST.Model.instructions #[instructions]
+  | _ => throwUnsupportedSyntax
+
+#check
+  let a = amo
+  let b = amo
+
+def prog :=
+  let a = amo
+  let b = amo
+
+#reduce prog
 
 -- def mkAssignment : Syntax -> Except String Assignment
 --   | `(Assignment| let $n:name = $e:Expr ) => return (Stmt.assignment (mkExpr e.) (mkExpr e))

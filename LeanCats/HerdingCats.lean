@@ -2,6 +2,8 @@ import Init.Data.List
 import Mathlib.Data.Set.Basic
 import Mathlib.Data.Rel
 
+namespace Primitives
+
 inductive Thread : Type where
   | mk: Nat -> Thread
 
@@ -18,23 +20,51 @@ inductive Action : Type where
 
 /-
 -/
-structure Event :=
+structure Event where
   (id : String)   -- Unique identifier
   (t_id : Nat)      -- Thread ID
   (t : Thread)    -- Associated thread
   (ln : Nat)        -- Line number or position
   (a : Action) -- Action performed
 
-structure Event₁ :=
+structure Event₁ where
   po : ℕ
   rf : ℕ
   fr : ℕ
+
+abbrev Events := Set Event
+
+def EventsM := MonadState Events
+
+def get_newval : StateT Events Option Unit := do
+  let old_events <- get
+  let st' <- pure old_events
+  sorry
+
 
 def isReadEvent (e : Event) : Prop :=
   sorry
 
 def isWriteEvent (e : Event) : Prop :=
   sorry
+
+def Events.empty : Set Event := {}
+
+def Events.write : Set Event := {}
+
+def Events.read : Set Event := {}
+
+def Events.memory : Set Event := {}
+
+def Events.initial_writes : Set Event := {}
+
+def Events.final_writes : Set Event := {}
+
+def Events.branch : Set Event := {}
+
+def Events.read_modify_write : Set Event := {}
+
+def Events.fence : Set Event := {}
 
 -- We define relation as a set.
 def R.mk {α : Type} (a b : α) : Set (α × α) := {(a, b)}
@@ -85,39 +115,9 @@ axiom EventIsUnique (e₁ e₂ : Event) : e₁ ≠ e₂ -- Assume each id is dif
 
 #check Thread.mk 1
 
-def test_event : Event :=
-{
-  id := "0"
-  t_id := 2
-  t := Thread.mk 1
-  ln := 4
-  a := Action.read "" ""
-}
-
-def test_event_1 : Event :=
-{
-  id := "1"
-  t_id := 2
-  t := Thread.mk 1
-  ln := 4
-  a := Action.read "" ""
-}
-
-def test_event_2 : Event :=
-{
-  id := "2"
-  t_id := 2
-  t := Thread.mk 1
-  ln := 4
-  a := Action.read "" ""
-}
-
 -- def po₁ := Rel.base test_event test_event_1 RoE.po (by apply EventIsUnique)
 -- def po₂ := Rel.base test_event_1 test_event_2 RoE.po (by apply EventIsUnique)
 -- #check po₁
-
-def po_new := R.mk test_event_1 test_event_2
-#check po_new
 
 def addr (e : Event) : String :=
   match e.a with
@@ -126,67 +126,47 @@ def addr (e : Event) : String :=
 
 
 /- instruction order lifted to events -/
-def po : Set (Event × Event) := R.empty
+def Relation.po : Set (Event × Event) := R.empty
 
 /- links a write w to a read r taking its value from w -/
-def rf : Set (Event × Event) := R.empty
+def Relation.rf : Set (Event × Event) := R.empty
 /- total order over writes to the same memory location -/
-def co : Set (Event × Event) := R.empty
+def Relation.co : Set (Event × Event) := R.empty
 
-def fr : Set (Event × Event) := R.empty
+def Relation.fr : Set (Event × Event) := R.empty
 
 /-
 The function ppo, given an execution (E, po, co, rf), returns the preserved program
 order.
 -/
-def ppo : Set (Event × Event) := R.empty
+def Relation.ppo : Set (Event × Event) := R.empty
 
 /- program order restricted to the same memory location -/
-def po_loc : Set (Event × Event) :=
-  { (x, y) | (x, y) ∈ po ∧ addr x = addr y }
+def Relation.po_loc : Set (Event × Event) :=
+  { (x, y) | (x, y) ∈ Relation.po ∧ addr x = addr y }
 
 /- links a read r to a write w′ co-after the write w from which r takes its value -/
-def com : Set (Event × Event) :=
-  fr ∪ rf ∪ co
+def Relation.com : Set (Event × Event) :=
+  Relation.fr ∪ Relation.rf ∪ Relation.co
 
 /-
 The function fences returns the pairs of events in program order that are separated by
 a fence, when given an execution.
 -/
-def fences : Set (Event × Event) := R.empty
+def Relation.fences : Set (Event × Event) := R.empty
 
-def WR : Set (Event × Event) := R.empty
+def Relation.WR : Set (Event × Event) := R.empty
 
 /-
 We can only reorder WR in TSO, so other orders are preserved.
 TSO has a write buffer so that the write operations maybe propgated out of order.
 -/
-def TSO_ppo : Set (Event × Event) := po \ WR
+def Relation.TSO_ppo : Set (Event × Event) := Relation.po \ Relation.WR
 
-/-
-The function prop returns the pairs of writes ordered by the propagation order, given
-an execution.
--/
-def test₁ := R.add test_event test_event_1 po
+macro "cats_in" : tactic =>
+  `(tactic|
+  (
+    repeat' constructor
+  ))
 
--- Example how we check if a relation is satisfied.
-theorem check_if_in : (test_event, test_event_1) ∈ test₁ :=
-  by
-    constructor
-    aesop
-
-/-
-An example of SC
-  input data: (ppo, fences, prop)
--/
-
--- A relation on natural numbers
-def lessThan : Rel Nat Nat := fun a b => a < b
-
--- A relation on custom types
-structure Person where
-  name : String
-  age : Nat
-
-def olderThan : Rel Person Person := fun p q => p.age > q.age
-#check olderThan
+end Primitives
