@@ -20,6 +20,9 @@ def r.data : Ident := "data_dependency"
 def r.ctrl : Ident := "control_dependency"
 def r.rmw : Ident := "read_modify_write_pair"
 def r.amo : Ident := "atomic_modify"
+def r.rf : Ident := "read_from"
+def r.fr : Ident := "from_read"
+def r.co : Ident := "coherence_order"
 
   -- | `(ident|emptyset) => return .const ``Primitives.Events.empty []
   -- | `(ident|W) => return .const ``Primitives.Events.write []
@@ -48,9 +51,9 @@ deriving Inhabited
 mutual
 
 inductive BinOp
-  | union : Term -> Term -> BinOp
-  | inter : Term -> Term -> BinOp
-  | diff : Term -> Term -> BinOp
+  | union : Term -> Expr -> BinOp
+  | inter : Term -> Expr -> BinOp
+  | diff : Term -> Expr -> BinOp
 
 inductive Term
   | name : QualifiedName -> Term
@@ -78,6 +81,9 @@ inductive Binding
 
 inductive Acyclic
   | expr : Expr -> Acyclic
+
+inductive AcyclicAs
+  | expr : QualifiedName -> Expr -> AcyclicAs
 
 inductive Instruction
   | binding : Binding -> Instruction

@@ -47,6 +47,9 @@ syntax "data" : keyword -- data dependency
 syntax "ctrl" : keyword -- control dependency
 syntax "rmw" : keyword -- read-exclusive write-exclusive pair
 syntax "amo" : keyword -- atomic modify
+syntax "rf" : keyword
+syntax "fr" : keyword
+syntax "co" : keyword
 
 -- def elabkeyword : Syntax -> MetaM Expr
 --   | `(keyword | $n:num) => mkApp #[]
@@ -67,6 +70,9 @@ def mkkeyword : Syntax -> MetaM Lean.Expr
   | `(keyword|ctrl) => return .const ``CatsAST.r.ctrl []
   | `(keyword|rmw) => return .const ``CatsAST.r.rmw []
   | `(keyword|amo) => return .const ``CatsAST.r.amo []
+  | `(keyword|rf) => return .const ``CatsAST.r.rf []
+  | `(keyword|fr) => return .const ``CatsAST.r.fr []
+  | `(keyword|co) => return .const ``CatsAST.r.co []
   | lit => mkAppM ``CatsAST.liter #[mkStrLit lit.getId.toString]
 
 declare_syntax_cat binOp
@@ -82,26 +88,27 @@ declare_syntax_cat model
 
 syntax ident : qualified_name -- qualifed_name is just a identifier.
 
-syntax keyword : dsl_term
 syntax binding : instruction
 syntax expr : instruction
 syntax acyclic : instruction
+
+syntax keyword : dsl_term
 syntax num : dsl_term
-
-syntax "acyclic" expr : acyclic
-syntax "let" qualified_name "=" expr : binding
-syntax qualified_name : expr
 syntax ident : dsl_term
-
 syntax "(" expr ")" : dsl_term
+
+syntax "acyclic" expr ("as" qualified_name)? : acyclic
+syntax "let" qualified_name "=" expr : binding
+
+syntax qualified_name : expr
 syntax dsl_term : expr
+syntax binOp : expr
 
 syntax num : const
 syntax str : const
-syntax binOp : expr
 
-syntax dsl_term "|" dsl_term: binOp
-syntax dsl_term "&" dsl_term: binOp
+syntax dsl_term "|" expr: binOp
+syntax dsl_term "&" expr: binOp
 syntax dsl_term "^" dsl_term: binOp
 syntax dsl_term "+" dsl_term: binOp
 syntax dsl_term "-" dsl_term: binOp
@@ -114,7 +121,6 @@ syntax "[instruction|" binding "]" : term
 
 syntax "[const|" const "]" : term
 syntax "[qualified_name|" qualified_name "]" : term
-syntax "[bin_or|" dsl_term "|" dsl_term : term
 syntax "[model|" model "]" : term
 
 def mkName : Syntax -> MetaM Lean.Expr
@@ -124,14 +130,15 @@ def mkName : Syntax -> MetaM Lean.Expr
 
 mutual -- mutual recursion.
 
+-- It's right associative now.
 partial def mkBinOp : Syntax -> MetaM Lean.Expr
-  | `(binOp | $t:dsl_term | $e:dsl_term) => do
+  | `(binOp | $t:dsl_term | $e:expr) => do
     let lhs <- mkTerm t
-    let rhs <- mkTerm e
+    let rhs <- mkExpr e
     mkAppM ``BinOp.union #[lhs, rhs]
-  | `(binOp | $t:dsl_term & $e:dsl_term) => do
+  | `(binOp | $t:dsl_term & $e:expr) => do
     let lhs <- mkTerm t
-    let rhs <- mkTerm e
+    let rhs <- mkExpr e
     mkAppM ``BinOp.inter #[lhs, rhs]
   | _ => throwUnsupportedSyntax
 
@@ -159,16 +166,22 @@ partial def mkTerm : Syntax -> MetaM Lean.Expr
 end
 
 def mkBinding : Syntax -> MetaM Lean.Expr
-  | `(binding| let $n:qualified_name = $e:expr ) => do
+  | `(binding| let $n = $e ) => do
     let n <- mkName n
     let e <- mkExpr e
     mkAppM ``Binding.varbinding #[n, e]
   -- TODO(Zhiyang) will implement pat binding (function binding) later.
   | _ => throwUnsupportedSyntax
 
--- def mkAcyclic : Syntax -> Except String Acyclic
---   | `(acyclic| acyclic $e:expr ) => Acyclic.expr <$> (mkExpr e)
---   | _ => throw "Failed to parse acyclic"
+def mkAcyclic : Syntax -> MetaM Lean.Expr
+  | `(acyclic| acyclic $e ) => do
+    let e <- mkExpr e
+    mkAppM ``Acyclic.expr #[e]
+  | `(acyclic| acyclic $e as $n ) => do
+    let e <- mkExpr e
+    let n <- mkName n
+    mkAppM ``AcyclicAs.expr #[n, e]
+  | _ => throwUnsupportedSyntax
 --
 -- def mkInstruction : Syntax -> Except String Instruction
 --   -- | `(instruction| $b:binding) => Instruction.binding <$> (mkBinding b)
@@ -176,22 +189,14 @@ def mkBinding : Syntax -> MetaM Lean.Expr
 --   | `(instruction| $a:acyclic ) => Instruction.acyclic <$> (mkAcyclic a)
 --   | _ => throw "Failed to parse statement"
 --
--- def mkConst : Syntax -> Except String Const
---   | `(const| $x:num ) => return Const.num_lit x.getNat
---   | `(const| $x:str ) => Const.str_lit <$> (mkName x)
---   | _ => throw "Failed to parse const"
-
--- def mkModel: Syntax -> Except String Model
---   | `(model| $i:instruction* ) => sorry
---   | `(model| $c:comment* ) => sorry
---   | _ => throw "Invalid model syntax"
-
 def mkInstruction : Syntax -> MetaM Lean.Expr
   | `(instruction| $b:binding) => do
     let binding <- mkBinding b
     mkAppM ``Instruction.binding #[binding]
   -- | `(instruction| $e:expr ) => Instruction.expr <$> (mkExpr e)
-  -- | `(instruction| $a:acyclic ) => Instruction.acyclic <$> (mkAcyclic a)
+  | `(instruction| $a:acyclic ) => do
+    let acyc <- (mkAcyclic a)
+    mkAppM ``Instruction.acyclic #[acyc]
   | _ => throwUnsupportedSyntax
 
 #check foldlM
@@ -211,7 +216,8 @@ elab m:model : term => do
   let b = amo
 
 def prog :=
-  let com = rf | fr
+  acyclic fr
+  let com = fr
 
 #reduce prog
 
