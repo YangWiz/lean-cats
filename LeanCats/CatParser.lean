@@ -198,6 +198,7 @@ elab m:model : term => do
 
 def prog :=
   let a = amo | amo
+  acyclic a
 
 #reduce prog
 
