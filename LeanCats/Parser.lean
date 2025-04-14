@@ -81,12 +81,9 @@ declare_syntax_cat expr
 declare_syntax_cat binding
 declare_syntax_cat const
 declare_syntax_cat acyclic
-declare_syntax_cat qualified_name
 declare_syntax_cat dsl_term
 declare_syntax_cat comment
 declare_syntax_cat model
-
-syntax ident : qualified_name -- qualifed_name is just a identifier.
 
 syntax binding : instruction
 syntax expr : instruction
@@ -97,10 +94,9 @@ syntax num : dsl_term
 syntax ident : dsl_term
 syntax "(" expr ")" : dsl_term
 
-syntax "acyclic" expr ("as" qualified_name)? : acyclic
-syntax "let" qualified_name "=" expr : binding
+syntax "acyclic" expr ("as" expr)? : acyclic
+syntax "let" expr "=" expr : binding
 
-syntax qualified_name : expr
 syntax dsl_term : expr
 syntax binOp : expr
 
@@ -115,18 +111,6 @@ syntax dsl_term "-" dsl_term: binOp
 
 -- syntax (comment+) : model
 syntax instruction* : model
-
--- Embed the dsl into Lean
-syntax "[instruction|" binding "]" : term
-
-syntax "[const|" const "]" : term
-syntax "[qualified_name|" qualified_name "]" : term
-syntax "[model|" model "]" : term
-
-def mkName : Syntax -> MetaM Lean.Expr
-  | `(qualified_name | $x:ident) => do
-    mkAppM ``QualifiedName.name #[mkStrLit x.getId.toString]
-  | _ => throwUnsupportedSyntax
 
 mutual -- mutual recursion.
 
@@ -149,9 +133,6 @@ partial def mkExpr : Syntax -> MetaM Lean.Expr
   | `(expr| $t:dsl_term ) => do
     let t <- mkTerm t
     mkAppM ``Expr.term #[t]
-  | `(expr | $n:qualified_name ) => do
-    let n <- mkName n
-    mkAppM ``CatsAST.Term.name #[n]
   | _ => throwUnsupportedSyntax
 
 partial def mkTerm : Syntax -> MetaM Lean.Expr
@@ -167,7 +148,7 @@ end
 
 def mkBinding : Syntax -> MetaM Lean.Expr
   | `(binding| let $n = $e ) => do
-    let n <- mkName n
+    let n <- mkExpr n
     let e <- mkExpr e
     mkAppM ``Binding.varbinding #[n, e]
   -- TODO(Zhiyang) will implement pat binding (function binding) later.
@@ -179,7 +160,7 @@ def mkAcyclic : Syntax -> MetaM Lean.Expr
     mkAppM ``Acyclic.expr #[e]
   | `(acyclic| acyclic $e as $n ) => do
     let e <- mkExpr e
-    let n <- mkName n
+    let n <- mkExpr n
     mkAppM ``AcyclicAs.expr #[n, e]
   | _ => throwUnsupportedSyntax
 --
@@ -199,6 +180,7 @@ def mkInstruction : Syntax -> MetaM Lean.Expr
     mkAppM ``Instruction.acyclic #[acyc]
   | _ => throwUnsupportedSyntax
 
+
 #check foldlM
 #check List.map
 
@@ -213,11 +195,9 @@ elab m:model : term => do
 
 #check
   let a = amo
-  let b = amo
 
 def prog :=
-  acyclic fr
-  let com = fr
+  let a = amo | amo
 
 #reduce prog
 

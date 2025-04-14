@@ -40,12 +40,9 @@ def r.co : Ident := "coherence_order"
   -- | `(ident|rmw) => mkConst ``ReadModifyWritePair
   -- | `(ident|amo) => mkConst ``AtomicModify
 
-inductive QualifiedName
-  | name: String -> QualifiedName
-
 inductive Const
   | num_lit : Nat -> Const
-  | str_lit : QualifiedName -> Const
+  | str_lit : Expr -> Const
 deriving Inhabited
 
 mutual
@@ -56,7 +53,7 @@ inductive BinOp
   | diff : Term -> Expr -> BinOp
 
 inductive Term
-  | name : QualifiedName -> Term
+  | name : Expr -> Term
   | negation : Term -> Term
   -- Expr itself is also a Term.
   | keyword : String -> Term
@@ -75,7 +72,7 @@ inductive Stmt
 
 inductive Binding
   -- valbinding ::=	id -> expr
-  | varbinding : QualifiedName -> Expr -> Binding
+  | varbinding : Expr -> Expr -> Binding
   -- funbinding := id -> pad -> expr
   | funbinding : Expr -> Expr -> Expr -> Binding
 
@@ -83,7 +80,7 @@ inductive Acyclic
   | expr : Expr -> Acyclic
 
 inductive AcyclicAs
-  | expr : QualifiedName -> Expr -> AcyclicAs
+  | expr : Expr -> Expr -> AcyclicAs
 
 inductive Instruction
   | binding : Binding -> Instruction
