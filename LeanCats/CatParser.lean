@@ -211,7 +211,3 @@ def prog :=
 -- elab v:num : const => mkConst v
 
 end Cats
-
-def main (path: System.FilePath) : IO String := do
-  let file <- IO.FS.readFile path
-  pure file
