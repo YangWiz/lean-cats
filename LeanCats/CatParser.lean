@@ -2,6 +2,7 @@ import LeanCats.AST
 import LeanCats.HerdingCats
 import Mathlib.Data.Set.Basic
 import Init.Data.List.Basic
+import Init.System.IO
 
 open CatsAST
 open Lean Elab Meta
@@ -27,7 +28,6 @@ open Lean Elab Meta
 
 namespace Cats
 
-section
 declare_syntax_cat keyword
 -- Predefined sets.
 syntax "emptyset" : keyword -- empty set of events
@@ -210,4 +210,8 @@ def prog :=
 
 -- elab v:num : const => mkConst v
 
-end
+end Cats
+
+def main (path: System.FilePath) : IO String := do
+  let file <- IO.FS.readFile path
+  pure file
