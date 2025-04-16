@@ -3,10 +3,6 @@ import LeanCats.HerdingCats
 import Mathlib.Data.Set.Basic
 import Init.Data.List.Basic
 import Init.System.IO
-
-open CatsAST
-open Lean Elab Meta
-
 /-
   The cat language is much inspired by OCaml, featuring immutable bindings, first-class functions, pattern matching, etc.
   However, cat is a domain specific language, with important differences from OCaml.
@@ -27,6 +23,8 @@ open Lean Elab Meta
 -/
 
 namespace Cats
+open CatsAST
+open Lean Elab Meta
 
 declare_syntax_cat keyword
 -- Predefined sets.
@@ -201,9 +199,6 @@ def prog :=
   acyclic a
 
 #reduce prog
-
-#check check
-
 -- def mkAssignment : Syntax -> Except String Assignment
 --   | `(Assignment| let $n:name = $e:Expr ) => return (Stmt.assignment (mkExpr e.) (mkExpr e))
 --   | _ => throw "Failed to parse assignement statement."
