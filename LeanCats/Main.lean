@@ -2,9 +2,10 @@ import Init.System.IO
 import LeanCats.CatParser
 import Lean
 
-def get_file(path: System.FilePath) : IO String := do
-  let file <- IO.FS.readFile path
-  sorry
+
+-- def get_file(path: System.FilePath) : IO String := do
+--   let file <- IO.FS.readFile path
+--   sorry
 
 -- This function is copied from Jason Rute on StackExchange
 -- https://proofassistants.stackexchange.com/questions/4873/how-to-parse-the-content-of-a-string-as-lean-4-code
@@ -24,4 +25,15 @@ unsafe def eval_string (s : String) : Lean.Elab.TermElabM String := do
   let x <- Lean.Elab.Term.evalTerm String tp stx (safety := Lean.DefinitionSafety.unsafe)
   return x
 
-#eval eval_string "(1: Nat) + 1"
+def prog :=
+  let a = amo | amo
+  acyclic a
+
+#reduce prog
+
+def prog₁ :=
+  "let a = amo | amo
+  acyclic a"
+
+set_option diagnostics true
+#eval (eval_string prog₁)

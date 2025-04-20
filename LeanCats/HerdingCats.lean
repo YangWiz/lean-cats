@@ -36,18 +36,6 @@ abbrev Events := Set Event
 
 def EventsM := MonadState Events
 
-def get_newval : StateT Events Option Unit := do
-  let old_events <- get
-  let st' <- pure old_events
-  sorry
-
-
-def isReadEvent (e : Event) : Prop :=
-  sorry
-
-def isWriteEvent (e : Event) : Prop :=
-  sorry
-
 def Events.empty : Set Event := {}
 
 def Events.write : Set Event := {}

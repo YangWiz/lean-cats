@@ -84,7 +84,6 @@ declare_syntax_cat comment
 declare_syntax_cat model
 
 syntax binding : instruction
-syntax expr : instruction
 syntax acyclic : instruction
 
 syntax keyword : dsl_term
@@ -122,7 +121,9 @@ partial def mkBinOp : Syntax -> MetaM Lean.Expr
     let lhs <- mkTerm t
     let rhs <- mkExpr e
     mkAppM ``BinOp.inter #[lhs, rhs]
-  | _ => throwUnsupportedSyntax
+  | _ => do
+    println! "Failed to parse binOp"
+    throwUnsupportedSyntax
 
 partial def mkExpr : Syntax -> MetaM Lean.Expr
   | `(expr| $e:binOp ) => do
@@ -131,7 +132,9 @@ partial def mkExpr : Syntax -> MetaM Lean.Expr
   | `(expr| $t:dsl_term ) => do
     let t <- mkTerm t
     mkAppM ``Expr.term #[t]
-  | _ => throwUnsupportedSyntax
+  | _ => do
+    println! "Failed to parse expr"
+    throwUnsupportedSyntax
 
 partial def mkTerm : Syntax -> MetaM Lean.Expr
   -- | `(dsl_term | ( $e:expr ) ) => CatsAST.Term.expr <$> (mkExpr e)
@@ -140,7 +143,9 @@ partial def mkTerm : Syntax -> MetaM Lean.Expr
   | `(dsl_term | $kw:keyword ) => do
     let kw <- mkkeyword kw
     mkAppM ``CatsAST.Term.keyword #[kw]
-  | _ => throwUnsupportedSyntax
+  | _ => do
+    println! "Failed to parse term"
+    throwUnsupportedSyntax
 
 end
 
@@ -176,11 +181,24 @@ def mkInstruction : Syntax -> MetaM Lean.Expr
   | `(instruction| $a:acyclic ) => do
     let acyc <- (mkAcyclic a)
     mkAppM ``Instruction.acyclic #[acyc]
-  | _ => throwUnsupportedSyntax
+  | _ => do
+    println! "Failed to parse instruction"
+    throwUnsupportedSyntax
 
 
 #check foldlM
 #check List.map
+
+-- elab m:model : term => do
+--   match m with
+--   | `(model| $ins:instruction*) => do
+--     let ins_list <- liftMetaM $ Array.mapM mkInstruction ins.raw
+--
+--     let instructions <- mkListLit (.const ``Instruction []) ins_list.toList
+--     mkAppM ``CatsAST.Model.instructions #[instructions]
+--   | _ =>
+--     println! "Failed to parse model."
+--     throwUnsupportedSyntax
 
 elab m:model : term => do
   match m with
@@ -189,16 +207,20 @@ elab m:model : term => do
 
     let instructions <- mkListLit (.const ``Instruction []) ins_list.toList
     mkAppM ``CatsAST.Model.instructions #[instructions]
-  | _ => throwUnsupportedSyntax
+  | _ =>
+    throwUnsupportedSyntax
 
-#check
-  let a = amo
-
+--
+-- #check
+--   let a = amo
+--
+-- abbrev output := IO
+--
 def prog :=
   let a = amo | amo
   acyclic a
-
-#reduce prog
+--
+-- #reduce prog
 -- def mkAssignment : Syntax -> Except String Assignment
 --   | `(Assignment| let $n:name = $e:Expr ) => return (Stmt.assignment (mkExpr e.) (mkExpr e))
 --   | _ => throw "Failed to parse assignement statement."
@@ -206,3 +228,5 @@ def prog :=
 -- elab v:num : const => mkConst v
 
 end Cats
+
+#check IO String
