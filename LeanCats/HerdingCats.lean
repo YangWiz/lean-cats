@@ -1,4 +1,8 @@
 import Init.Data.List
+import Mathlib.Data.Set.Basic
+import Mathlib.Data.Rel
+
+namespace Primitives
 
 inductive Thread : Type where
   | mk: Nat -> Thread
@@ -16,157 +20,141 @@ inductive Action : Type where
 
 /-
 -/
-structure Event :=
+structure Event where
   (id : String)   -- Unique identifier
   (t_id : Nat)      -- Thread ID
   (t : Thread)    -- Associated thread
   (ln : Nat)        -- Line number or position
   (a : Action) -- Action performed
 
-def isReadEvent (e : Event) : Prop :=
-  sorry
+structure Event₁ where
+  po : ℕ
+  rf : ℕ
+  fr : ℕ
 
-def isWriteEvent (e : Event) : Prop :=
-  sorry
+abbrev Events := Set Event
 
-/-
-For a given location x the coherence order is a total strict order on the write events to location x.
--/
+def EventsM := MonadState Events
 
-/-
-We define a Relation as α -> α -> Prop
-Executions are tuples (E, po, rf, co), which consist of a set of events E,
-giving a semantics to the instructions, and three relations over events: po, rf, and co
-Relation over Events.
+def Events.empty : Set Event := {}
 
-See Table II. Glossary of Relations.
--/
+def Events.write : Set Event := {}
 
-inductive RoE : Prop
-where
-  -- Foundational relations
-  | po
-  | rf
-  | fr
-  -- Read write pair relations
-  | RR (e₁ e₂ : Event) (h : isReadEvent e₁ ∧ isReadEvent e₂) : RoE
-  | RW (e₁ e₂ : Event) (h : isReadEvent e₁ ∧ isWriteEvent e₂) : RoE
-  | WR (e₁ e₂ : Event) (h : isWriteEvent e₁ ∧ isReadEvent e₂) : RoE
-  | WW (e₁ e₂ : Event) (h : isWriteEvent e₁ ∧ isWriteEvent e₂) : RoE
-  -- Architectural order
-  | co
-  | comp : RoE -> RoE -> RoE
+def Events.read : Set Event := {}
 
-/-
-This is used for expressing sequential composition.
--/
-notation (priority := high) r₁ ";" r₂ => RoE.comp r₁ r₂
+def Events.memory : Set Event := {}
 
-/-
-Inductive predicates are used to prove something, so it has difference with inductive type.
--/
-inductive Rel {α : Type} : RoE -> α -> α -> Prop
-where
-  | base (a b : α) (r : RoE) (h : a ≠ b) : Rel r a b
-  | seq_comp {r₁ r₂ : RoE} {a b c : α} : Rel r₁ a b -> Rel r₂ b c -> Rel (r₁;r₂) a c
-  -- We write irreflexive(r) to express the irreflexivity of r (i.e., ¬(∃x.(x, x) ∈ r))
-  -- There is no way to represent ∃x, (x, x) ∈ r, so it's irreflexivity indeed.
+def Events.initial_writes : Set Event := {}
+
+def Events.final_writes : Set Event := {}
+
+def Events.branch : Set Event := {}
+
+def Events.read_modify_write : Set Event := {}
+
+def Events.fence : Set Event := {}
+
+-- We define relation as a set.
+def R.mk {α : Type} (a b : α) : Set (α × α) := {(a, b)}
+
+def R.add {α : Type} (a b : α) (r : Set (α × α)) := (R.mk a b) ∪ r
+
+def R.empty {α : Type} : Set (α × α) := {}
+
+def R.seq_comp {α : Type} (set₁ set₂ : Set (α × α)) : Set (α × α)
+    := { (x, y) | ∃z, (x, z) ∈ set₁ ∧ (z, y) ∈ set₂}
+
+notation (priority := high) r₁ ";" r₂ => R.seq_comp r₁ r₂
+
+-- Define a calculation of cloure in a very inefficient way.
+-- def R.closure {α : Type} [DecidableEq α] (set : Set (α × α)) : Set (α × α) :=
+--   let iterate (s : Set (α × α)) (a : α) : Set (α × α)  :=
+--     let s' := { (x, y) | ∃z, (x, z) ∈ set ∧ (z, y) ∈ set } ∪ s
+--     if (∀e, e ∈ s) then s else iterate s'
+--   iterate set
 
 /-
 We denote the transitive (resp. reflexive-transitive) closure of a relation r as
 r+ (resp. r∗).
 -/
-inductive RStar {α : Type} : Prop -> Prop
-where
-  | base (r : RoE) (a b : α) (h : a ≠ b)  : Rel r a b -> RStar (Rel r a b) -- We should contains relation itself
-  -- | refl (a : α) : RStar (Rel a a)
-  | trans (r : RoE) (a b c : α) : Rel r a b -> Rel r b c -> RStar (Rel r a c)
+inductive RStar {α : Type} (set : Set (α × α)) : α → α → Prop
+| base {a b : α} : (a, b) ∈ set → RStar set a b
+| step {a b c : α} : RStar set a b → RStar set b c → RStar set a c
 
--- theorem RelIsRstar {α : Type } {a b c d : α}:
+def TransClosure {α : Type} (set : Set (α × α)) : Set (α × α) :=
+  { (a, b) | RStar set a b }
 
+#check {} = {}
 
--- #check Rel.seq (Rel.base 1 2 RoE.fr (by decide)) (Rel.base 2 3 RoE.fr (by decide))
--- #check (Rel.base 1 2 RoE.fr (by decide)) ; (Rel.base 2 3 RoE.fr (by decide))
---
--- def test_seq := (Rel.base 1 2 RoE.fr (by decide)) ; (Rel.base 2 3 RoE.fr (by decide))
--- #check test_seq
+def r₁ := R.mk 1 2
+def r₂ := R.add 2 3 r₁
+def r₃ := R.add 4 5 r₂
 
--- Check if clusore fullfill the reflexive.
--- def test_star := RStar.refl 1
--- #check test_star
+def r := TransClosure r₃
+
+def R.irreflexive {α : Type} (set : Set (α × α)) : Prop :=
+  ¬ (∃x, (x, x) ∈ set)
+
+-- We chouldn't find a cycle after we find all the direct/undirect relations.
+def R.acyclic {α : Type} (set : Set (α × α)) : Prop :=
+  R.irreflexive (TransClosure set)
 
 axiom EventIsUnique (e₁ e₂ : Event) : e₁ ≠ e₂ -- Assume each id is different.
 
 #check Thread.mk 1
--- def mk (e : Event) : Excution := {E := ∅, po := Unit, rf := e, fr := e}
 
---  (w, r) ∈ WR means that w is a write and r a read.
--- inductive RWPair : Prop -> Prop
--- where
---   | WR (e₁ e₂ : Event) : RWPair (Rel e₁ e₂)
---   | RR (e₁ e₂ : Event) : RWPair (Rel e₁ e₂)
---   | WW (e₁ e₂ : Event) : RWPair (Rel e₁ e₂)
---   | RW (e₁ e₂ : Event) : RWPair (Rel e₁ e₂)
+-- def po₁ := Rel.base test_event test_event_1 RoE.po (by apply EventIsUnique)
+-- def po₂ := Rel.base test_event_1 test_event_2 RoE.po (by apply EventIsUnique)
+-- #check po₁
 
-def test_event : Event :=
-{
-  id := "0"
-  t_id := 2
-  t := Thread.mk 1
-  ln := 4
-  a := Action.read "" ""
-}
+def addr (e : Event) : String :=
+  match e.a with
+  | Action.read addr' _ => addr'
+  | Action.write addr' _ => addr'
 
-def test_event_1 : Event :=
-{
-  id := "1"
-  t_id := 2
-  t := Thread.mk 1
-  ln := 4
-  a := Action.read "" ""
-}
 
-def test_event_2 : Event :=
-{
-  id := "1"
-  t_id := 2
-  t := Thread.mk 1
-  ln := 4
-  a := Action.read "" ""
-}
+/- instruction order lifted to events -/
+def Relation.po : Set (Event × Event) := R.empty
 
-def po₁ := Rel.base test_event test_event_1 RoE.po (by apply EventIsUnique)
-def po₂ := Rel.base test_event_1 test_event_2 RoE.po (by apply EventIsUnique)
-#check po₁
+/- links a write w to a read r taking its value from w -/
+def Relation.rf : Set (Event × Event) := R.empty
+/- total order over writes to the same memory location -/
+def Relation.co : Set (Event × Event) := R.empty
 
-def rr := Rel.base test_event test_event_1 (RoE.RR test_event test_event_1 (sorry))
+def Relation.fr : Set (Event × Event) := R.empty
 
-def RRpo {e₁ e₂ : Event} (h : isReadEvent e₁ ∧ isReadEvent e₂) := Rel RoE.po e₁ e₂ -> Rel (RoE.RR e₁ e₂ h) e₁ e₂
-#check RRpo (sorry)
+/-
+The function ppo, given an execution (E, po, co, rf), returns the preserved program
+order.
+-/
+def Relation.ppo : Set (Event × Event) := R.empty
 
--- We write po ∩ WR for the write-read pairs in program order
--- def po (e₁ e₂ : Event) := RoE.po e₁ e₂
--- def po_1 := po test_event test_event -- This can be used as an assumption.
+/- program order restricted to the same memory location -/
+def Relation.po_loc : Set (Event × Event) :=
+  { (x, y) | (x, y) ∈ Relation.po ∧ addr x = addr y }
 
--- #check po_1
+/- links a read r to a write w′ co-after the write w from which r takes its value -/
+def Relation.com : Set (Event × Event) :=
+  Relation.fr ∪ Relation.rf ∪ Relation.co
 
-#check Event
+/-
+The function fences returns the pairs of events in program order that are separated by
+a fence, when given an execution.
+-/
+def Relation.fences : Set (Event × Event) := R.empty
 
-def rfe (e₁ e₂ : Event) :=
-  Rel RoE.rf e₁ e₂ ∧ e₁.t_id ≠ e₂.t_id
+def Relation.WR : Set (Event × Event) := R.empty
 
-#check True
+/-
+We can only reorder WR in TSO, so other orders are preserved.
+TSO has a write buffer so that the write operations maybe propgated out of order.
+-/
+def Relation.TSO_ppo : Set (Event × Event) := Relation.po \ Relation.WR
 
--- po\WR for all pairs in program order except the write-read pairs.
--- def test_poNWR (e₁ e₂ : Event) := RoE (Rel e₁ e₂) -> ¬ RWPair (Rel e₁ e₂)
--- #check test_poNWR test_event test_event
+macro "cats_in" : tactic =>
+  `(tactic|
+  (
+    repeat' constructor
+  ))
 
--- We write proc(e) for the thread holding the event e.
-inductive EventProp (e : Event) : Type
-where
-  | proc : EventProp e
-  | addr : EventProp e
-
--- Playground
--- We define a communication as for all events e₁ and e₂, it should be po or rf or fr relations.
-def com (e₁ e₂ : Event) := Rel RoE.rf e₁ e₂ ∨ Rel RoE.fr e₁ e₂ ∨ Rel RoE.co e₁ e₂
+end Primitives
