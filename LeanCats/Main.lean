@@ -2,7 +2,6 @@ import Init.System.IO
 import LeanCats.CatParser
 import Lean
 
-
 -- def get_file(path: System.FilePath) : IO String := do
 --   let file <- IO.FS.readFile path
 --   sorry
@@ -32,8 +31,11 @@ def prog :=
 #reduce prog
 
 def prog₁ :=
-  "let a = amo | amo
-  acyclic a"
+  "let com = rf | fr | co
+  acyclic po | com"
 
 set_option diagnostics true
 #eval (eval_string prog₁)
+
+-- The good news is that the Lean4 is functional programming language, so everything is (alomost) immutable,
+-- We don't need to care if the variable is changed after passing it.

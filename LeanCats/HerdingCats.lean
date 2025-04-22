@@ -57,7 +57,7 @@ def Events.fence : Set Event := {}
 -- We define relation as a set.
 def R.mk {α : Type} (a b : α) : Set (α × α) := {(a, b)}
 
-def R.add {α : Type} (a b : α) (r : Set (α × α)) := (R.mk a b) ∪ r
+def R.add {α : Type} (r : Set (α × α)) (p : α × α):= {p} ∪ r
 
 def R.empty {α : Type} : Set (α × α) := {}
 
@@ -87,10 +87,6 @@ def TransClosure {α : Type} (set : Set (α × α)) : Set (α × α) :=
 #check {} = {}
 
 def r₁ := R.mk 1 2
-def r₂ := R.add 2 3 r₁
-def r₃ := R.add 4 5 r₂
-
-def r := TransClosure r₃
 
 def R.irreflexive {α : Type} (set : Set (α × α)) : Prop :=
   ¬ (∃x, (x, x) ∈ set)
@@ -112,6 +108,7 @@ def addr (e : Event) : String :=
   | Action.read addr' _ => addr'
   | Action.write addr' _ => addr'
 
+abbrev Relation := Set (Event × Event)
 
 /- instruction order lifted to events -/
 def Relation.po : Set (Event × Event) := R.empty
