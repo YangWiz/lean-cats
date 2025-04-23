@@ -55,7 +55,9 @@ def get_po (litmus : LitmusAST.Litmus) : Primitives.Relation :=
 
   let (all_program_events, _) := process_programs litmus.programs start
 
-  sorry
+  let events_list := all_program_events.map zip_instructions
+
+  events_list.foldl Set.union Primitives.R.empty
 
 def get_rf (litmus : LitmusAST.Litmus) : Primitives.Relation :=
   sorry

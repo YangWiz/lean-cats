@@ -39,3 +39,15 @@ set_option diagnostics true
 
 -- The good news is that the Lean4 is functional programming language, so everything is (alomost) immutable,
 -- We don't need to care if the variable is changed after passing it.
+
+-- The strictness of models is defined as, for two different models m₁ and m₂, if the number of accepted
+-- program in m₁ is larger than the in m₂, we say m₁ is stronger than m₂: we write it as m₁ > m₂.
+-- We use "ayclic relations" to define the disallowed beheviours, so we need to define what's a acyclic.
+-- We define acyclic as: ¬(∃x.(x, x) ∈ r+), like in the sc example, we have acyclic po | com, which means,
+-- We will omit all the other possible relations contain cyclic, in this step, we need computation.
+-- Because some relations are dependent on other relations, we want to check if there is any possiblities that
+-- we can find if m₁ is stronger than m₂ without computation.
+-- Start with the simplist one acyclic po. We know po does't acyclic, so we have our first lemma:
+
+-- We define program order as (e.linenumber < e.linenumber && e.thread_id == e.thread_id)
+-- we define cohenrence order as (e.w.target == e.w.target)

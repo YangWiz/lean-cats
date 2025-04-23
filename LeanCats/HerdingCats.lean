@@ -1,11 +1,15 @@
 import Init.Data.List
 import Mathlib.Data.Set.Basic
 import Mathlib.Data.Rel
+import Mathlib.Logic.Relation
 
 namespace Primitives
 
 inductive Thread : Type where
   | mk: Nat -> Thread
+
+abbrev write := "write"
+abbrev read := "read"
 
 /-
 Actions are of several kinds, which we detail in the course of this article. For now, we
@@ -14,9 +18,10 @@ location x, we can have a read of the value 0 noted Rx = 0, or a write of the va
 noted Wx = 1. We write proc(e) for the thread holding the event e and addr(e) for its
 address, or memory location.
 -/
-inductive Action : Type where
-  | write : String -> String -> Action
-  | read : String -> String -> Action
+structure Action : Type where
+  action : String
+  target : String
+  value : String
 
 /-
 -/
@@ -103,10 +108,10 @@ axiom EventIsUnique (e₁ e₂ : Event) : e₁ ≠ e₂ -- Assume each id is dif
 -- def po₂ := Rel.base test_event_1 test_event_2 RoE.po (by apply EventIsUnique)
 -- #check po₁
 
-def addr (e : Event) : String :=
-  match e.a with
-  | Action.read addr' _ => addr'
-  | Action.write addr' _ => addr'
+-- def addr (e : Event) : String :=
+--   match e.a with
+--   | Action.read addr' _ => addr'
+--   | Action.write addr' _ => addr'
 
 abbrev Relation := Set (Event × Event)
 
@@ -127,8 +132,8 @@ order.
 def Relation.ppo : Set (Event × Event) := R.empty
 
 /- program order restricted to the same memory location -/
-def Relation.po_loc : Set (Event × Event) :=
-  { (x, y) | (x, y) ∈ Relation.po ∧ addr x = addr y }
+-- def Relation.po_loc : Set (Event × Event) :=
+--   { (x, y) | (x, y) ∈ Relation.po ∧ addr x = addr y }
 
 /- links a read r to a write w′ co-after the write w from which r takes its value -/
 def Relation.com : Set (Event × Event) :=
@@ -153,5 +158,23 @@ macro "cats_in" : tactic =>
   (
     repeat' constructor
   ))
+
+
+-- We define program order as (e.linenumber < e.linenumber && e.thread_id == e.thread_id)
+-- we define cohenrence order as (e.w.target == e.w.target)
+def po_rel (e₁ e₂ : Event) : Prop := e₁.ln < e₂.ln ∧ e₁.t_id == e₂.t_id
+
+def rf_rel (e₁ e₂ : Event) : Prop := e₁.a.action == write ∧ e₂.a.action == read ∧ (e₁.a.target == e₂.a.target)
+
+-- coherence order: successive writes to the same location, if they're in the same thread we need to maintain data-dependency order,
+-- which means the co follows the program order, if they're in different thread, we don't care the line number.
+def co_rel (e₁ e₂ : Event) : Prop :=
+  e₁.a.action == write ∧ e₂.a.action == write ∧ e₁.a.target == e₂.a.target ∧
+  ((e₁.ln < e₂.ln ∧ e₁.t_id == e₂.t_id) ∨ (e₁.t_id ≠ e₂.t_id))
+
+def trans : Set (Event × Event) → Set (Event × Event) :=
+  fun r => { p | Relation.TransGen (fun a b => (a, b) ∈ r) p.1 p.2 }
+
+def po : Set (Event × Event) := {(a, b) | po_rel a b}
 
 end Primitives
