@@ -7,6 +7,7 @@ namespace Primitives
 
 inductive Thread : Type where
   | mk: Nat -> Thread
+deriving BEq, Repr
 
 abbrev write := "write"
 abbrev read := "read"
@@ -23,6 +24,7 @@ structure Action : Type where
   target : String
   -- For read, the value can not be determined at the begining.
   value : Option String
+deriving BEq, Repr
 
 /-
 -/
@@ -32,6 +34,7 @@ structure Event where
   (t : Thread)    -- Associated thread
   (ln : Nat)        -- Line number or position
   (a : Action) -- Action performed
+deriving BEq, Repr
 
 structure Event₁ where
   po : ℕ
@@ -57,9 +60,19 @@ def co_rel (e₁ e₂ : Event) : Prop :=
 -- @[simp] def trans (r : Event -> Event -> Prop) : Set (Event × Event) :=
 --   { p | Relation.TransGen r p.1 p.2 }
 
+@[simp] def irreflexivity {α : Type} (r : α -> α -> Prop) := ¬ (∃ a, (r a a))
+
+@[simp] def comp_tc {α : Type} (lst : List α) (r : α -> α -> Prop) [∀ (a b : α), Decidable (r a b)] : List (α × α) :=
+  let pairs := lst.product lst
+  pairs.filter (fun p => if r p.1 p.2 then true else false)
+
+@[simp] def acyclic {α : Type} [BEq α] (lst : List α) (r : α -> α -> Prop) [∀ (a b : α), Decidable (r a b)] : Prop :=
+  let tc := comp_tc lst r
+  ∀p ∈ tc, p.1 ≠ p.2
+
 -- TransGen: https://leanprover-community.github.io/mathlib4_docs/Init/Core.html#Relation.TransGen
-@[simp] def acyclic (events : List Event) (r : Event -> Event -> Prop) : Prop :=
-  ¬(∃e, Relation.TransGen r e e ∧ e ∈ events)
+@[simp] def acyclic_predicates {α : Type} (search_space : List α) (r : α -> α -> Prop) : Prop :=
+  ∀ e ∈ search_space, ¬(∃e, Relation.TransGen r e e)
 
 @[simp] def cyclic (r : Event -> Event -> Prop) : Prop := ∃x, Relation.TransGen r x x
 
@@ -68,6 +81,10 @@ def po : Set (Event × Event) := {(a, b) | po_rel a b}
 
 -- From write to read.
 @[simp] def rf (e₁ e₂ : Event) : Prop := e₁.a.action == write ∧ e₂.a.action == read ∧ (e₁.a.target == e₂.a.target)
+
+instance (e₁ e₂ : Event) : Decidable (rf e₁ e₂) :=
+  show Decidable (e₁.a.action == write ∧ e₂.a.action == read ∧ (e₁.a.target == e₂.a.target)) from
+    inferInstanceAs (Decidable (_ ∧ _ ∧ _))
 
 -- Step 2: Data flow semantics
 -- The read-from relation rf describes, for any given read, from which write this read could have taken its value.
@@ -108,34 +125,13 @@ section Test
 
 @[simp] def test_list := [e₁, e₂, e₃, e₄]
 -- @[simp] def real_relation (e₁ e₂ : Event) (h : e₁ ∈ test_list ∧ e₂ ∈ test_list) := rf e₁ e₂
--- @[simp] def test := { (e₁, e₂) | rf e₁ e₂ ∧ e₁ ∈ test_list ∧ e₂ ∈ test_list }
 
-@[simp] def test_ayc := acyclic test
-
-theorem test12 : (e₁, e₂) ∈ test :=
-  by
-    aesop
-
-theorem test13 : ¬ (e₁, e₃) ∈ test :=
-  by
-    aesop
-
-theorem test14 : ¬ (e₁, e₄) ∈ test :=
-  by
-    aesop
+@[simp] def test_ayc := acyclic test_list rf
 
 theorem test_a : test_ayc :=
   by
     aesop
-
-    -- Define a automatic transitive relation builder.
-
-def listToSmallSet (lst : List Nat) : Set Nat :=
-  {x | x ∈ lst ∧ x < 2}
-
-theorem test₁ : rf e₁ e₂ :=
-  by
-    aesop
+    contradiction
 
 end Test
 
