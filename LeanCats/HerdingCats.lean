@@ -1,13 +1,17 @@
-import Init.Data.List
+import Init.Data.List.Basic
 import Mathlib.Data.Set.Basic
 import Mathlib.Data.Rel
 import Mathlib.Logic.Relation
+import Mathlib.Order.FixedPoints
+import Mathlib.Data.Multiset.Basic
+import Mathlib.Data.Finset.Basic
+import Mathlib.Data.Fintype.Basic -- For Fintype
 
 namespace Primitives
 
 inductive Thread : Type where
   | mk: Nat -> Thread
-deriving BEq, Repr
+deriving BEq, Repr, DecidableEq
 
 abbrev write := "write"
 abbrev read := "read"
@@ -26,7 +30,7 @@ structure Action : Type where
   value : Option Nat
   isFirstWrite : Bool
   isFinalWrite : Bool
-deriving BEq, Repr
+deriving BEq, Repr, DecidableEq
 
 /-
 -/
@@ -36,21 +40,27 @@ structure Event where
   (t : Thread)    -- Associated thread
   (ln : Nat)        -- Line number or position
   (a : Action) -- Action performed
-deriving BEq, Repr
+deriving BEq, Repr, DecidableEq
 
 structure Event₁ where
   po : ℕ
   rf : ℕ
   fr : ℕ
 
+instance : DecidableEq (Event × Event) :=
+  inferInstance
+
+@[simp] def rel.domain (input : List Event) : Finset (Event × Event) :=
+  Multiset.ofList (input.product input) |>.toFinset
+
 -- We define program order as (e.linenumber < e.linenumber && e.thread_id == e.thread_id)
 -- we define cohenrence order as (e.w.target == e.w.target)
 @[simp] def po (e₁ e₂ : Event) : Prop := e₁.ln < e₂.ln ∧ e₁.t_id == e₂.t_id
-
+--
 instance (e₁ e₂ : Event) : Decidable (po e₁ e₂) :=
   show Decidable (e₁.ln < e₂.ln ∧ e₁.t_id == e₂.t_id) from
     inferInstanceAs (Decidable (_ ∧ _))
-
+--
 -- def data_dependency (e₁ e₂ : Event) : Prop :=
 
 -- coherence order: successive writes to the same location, if they're in the same thread we need to maintain data-dependency order,
@@ -93,9 +103,48 @@ instance (e₁ e₂ : Event) : Decidable (co e₁ e₂) :=
 
 @[simp] def irreflexivity {α : Type} (r : α -> α -> Prop) := ¬ (∃ a, (r a a))
 
-@[simp] def comp_tc {α : Type} (lst : List α) (r : α -> α -> Prop) [∀ (a b : α), Decidable (r a b)] : List (α × α) :=
-  let pairs := lst.product lst
-  pairs.filter (fun p => if r p.1 p.2 then true else false)
+
+@[simp] def irreflexivity.set {α : Type} (r : Finset (α × α)) :=
+  ¬ (∃ a, (a, a) ∈ r)
+
+@[reducible]
+def rel (a b : Nat) : Prop := b = a + 1
+
+-- instance (a b : Nat) : Decidable (rel a b) :=
+--   show Decidable (rel a b) from
+--     inferInstance (_)
+
+-- Input is a list of events.
+@[simp] def comp_tc {α : Type} (elements : List α) (relation : α → α → Prop)
+  [BEq α] [DecidableRel relation] : List (α × α) :=
+  let direct_pairs := elements.product elements |>.filter (fun p => relation p.1 p.2)
+
+  let expand (pairs : List (α × α)) : List (α × α) :=
+    let new_pairs := pairs.flatMap (fun p1 =>
+      pairs.flatMap (fun p2 =>
+        if p1.2 == p2.1 && !(pairs.contains (p1.1, p2.2)) then
+          [(p1.1, p2.2)]
+        else
+          []
+      )
+    )
+    (pairs ++ new_pairs).eraseDups
+
+  let max_iterations := elements.length * elements.length
+
+  -- Use fold to iterate the fixed point computation
+  List.range max_iterations |>.foldl
+    (fun acc _ =>
+      let next := expand acc
+      if next.length == acc.length then acc else next)
+    direct_pairs
+
+def tc_operator {α : Type} (r : α → α → Prop) (s : Set (α × α)) : Set (α × α) :=
+  { (a, b) | r a b} ∪ {(a, c) | ∃ b, (a, b) ∈ s ∧ (b, c) ∈ s}
+
+#eval comp_tc [1, 2, 3] rel
+
+#eval comp_tc [2, 3, 4] rel
 
 @[simp] def acyclic {α : Type} [BEq α] (tc : List (α × α)) : Bool :=
   tc.any (fun p => p.1 == p.2)
@@ -111,9 +160,13 @@ instance (e₁ e₂ : Event) : Decidable (co e₁ e₂) :=
 -- From write to read.
 @[simp] def rf (e₁ e₂ : Event) : Prop := e₁.a.action == write ∧ e₂.a.action == read ∧ (e₁.a.target == e₂.a.target)
 
+#check rf
+
 instance (e₁ e₂ : Event) : Decidable (rf e₁ e₂) :=
   show Decidable (e₁.a.action == write ∧ e₂.a.action == read ∧ (e₁.a.target == e₂.a.target)) from
     inferInstanceAs (Decidable (_ ∧ _ ∧ _))
+
+#synth DecidableRel rf
 
 -- Step 2: Data flow semantics
 -- The read-from relation rf describes, for any given read, from which write this read could have taken its value.
@@ -246,7 +299,7 @@ def test_ret := groupBySndEq rf_all
 def candidates_rf := cross test_ret
 #eval candidates_rf.head!
 
-def co.candidates (events : List Event) : List (List (List (Event × Event))) :=
+def co.candidates (events : List Event) : List (List (Event × Event)) :=
   -- First we need to get all the write events.
   -- Then we need to group them by their location.
   let wsx := groupByLocEvent (Ws events)
@@ -261,7 +314,7 @@ def co.candidates (events : List Event) : List (List (List (Event × Event))) :=
   let ws_pairs_x_iw := ws_pairs_x.map (fun outer_lst ↦ outer_lst.filter (fun inner_lst ↦ inner_lst.all (fun p ↦ ¬ p.snd.a.isFirstWrite)))
 
   -- Generate all the candidates.
-  cross ws_pairs_x_iw
+  (cross ws_pairs_x_iw).map (fun lst ↦ lst.flatten)
 
 end Test
 
@@ -302,13 +355,11 @@ def ws_pairs_x_iw := ws_pairs.map (fun outer_lst ↦ outer_lst.filter (fun inner
 #eval ws_pairs_x_iw.head!.length
 #eval ws_pairs_x_iw.tail.head!.length
 
-def co_candidates := cross ws_pairs_x_iw
+def co_candidates := (cross ws_pairs_x_iw).map (fun inner_lst ↦ inner_lst.flatten)
 
 #eval co_candidates.head!.length -- Should be 2.
 
-
-
-def co₁ := co_candidates.head!.head!
+def co₁ := co_candidates.head!
 #eval co₁
 
 #eval relation_inverse co₁
@@ -346,8 +397,244 @@ def rfpo₁ := rfpo.map (fun rels ↦ (rels.fst ++ rels.snd).eraseDups)
 #eval rfpo₁.length = 4 -- should be 4
 
 -- Then we need to create from read.
+-- This reverse corresponding to ^-1
 def inversed_rd := mp_rf_candidates.map (relation_inverse)
 
+-- Then we need to get the ; (sequence): (i.e., (x, y) ∈ (r1 ; r2 ) ↔ ∃z.(x, z) ∈ r1 ∧ (z, y) ∈ r2 )
+def seq (candidate_l candidate_r: List (Event × Event)) : List (Event × Event) :=
+  candidate_l.foldl (fun acc lhs ↦
+    acc ++ (candidate_r.filter (fun rhs ↦ lhs.snd == rhs.fst)).map (fun p ↦ (lhs.fst, p.snd))
+  ) []
+
+#eval (mp_rf_candidates.eraseIdx 0).head!
+def fst := relation_inverse mp_rf_candidates.head!
+
+def test_fr := seq fst mp_co_candidates.head!
+#eval test_fr
+
+def fr.candidates (rf_all co_all : List (List (Event × Event))) : List (List (Event × Event)) :=
+  (((rf_all).product co_all).map (fun frco_pair ↦ seq (relation_inverse frco_pair.fst) frco_pair.snd)).filter (fun fr ↦ fr.length > 0)
+
+def union (l r : List (Event × Event)) : List (Event × Event) :=
+  (l ++ r).eraseDups
+
+def fr_all := fr.candidates mp_rf_candidates mp_co_candidates
+#eval fr_all.length = 3
+
+#eval fr_all
+
+-- rf^-1;co
+def frGen (rf_set co_set : List (Event × Event)) : List (Event × Event) :=
+  seq (relation_inverse rf_set) (co_set)
+
+-- Now anaysis this program.
+-- (* Group communication relations together *)
+-- let com = rf | fr | co
+-- (* Sequential consistency condition *)
+-- acyclic po | com as sc
+
+-- This one is wrong
+-- def final := union rfpo₁ fr_all
+-- #eval final.length
+
+-- We can now see we have rf, co, po, these three are base relation, the fr is derived by rf and co.
+-- We should first connect these relation.
+abbrev AllCandidates := List (List (Event × Event))
+abbrev RelSet := List (Event × Event)
+
+abbrev poIdx := Fin 1
+abbrev rfIdx := Fin 2
+abbrev coIdx := Fin 3
+
+abbrev CatEnv := Std.HashMap String RelSet
+
+#check List CatEnv
+
+-- Use cross to connect them.
+-- def connect (l r : AllCandidates) : List (Std.HashMap String RelSet) :=
+--   (l.product r).foldl (fun acc p ↦ acc ++ [p.fst, p.snd]) []
+
 end mp_test
+
+def seq_prop {α : Type} (r₁ r₂ : α -> α -> Prop) : α -> α -> Prop :=
+  let t1 := Subrelation r₁ r₂
+  sorry
+
+infix:50 (priority:=high) " ; " => seq_prop
+
+theorem seq₁ {α : Type} {r₁ r₂ : α -> α -> Prop} : ∀ x y, (r₁;r₂) x y ↔ ∃z, r₁ x z ∧ r₂ z y := sorry
+
+-- First prove the subset, then use Set to prove TransGen.
+-- The definition of TransGen is:
+-- TransGen r a z if and only if there exists a sequence a r b r ... r z of length at least 1 connecting a to z.
+-- [(x, y) : ∃z, (x, z) ∧ (z, y)]
+@[simp] def comp_tc_co (elems : List Event) : List (Event × Event) :=
+  -- Find all possible relations.
+  let all := elems.product elems
+  -- Base step.
+  let base_tc := all |>.filter (fun p ↦ co p.1 p.2)
+
+  let rec comp_tc_in (n : Nat) (curr_tc : List (Event × Event)) : List (Event × Event) :=
+    -- find all the indirect connect ones (Can't be itself).
+    match n with
+    | 0 =>
+      curr_tc
+    | n' + 1 =>
+      let step_tc : List (Event × Event) :=
+        all.product all
+        |>.filter (fun p ↦ p.1.2 == p.2.1 && curr_tc.contains p.1 && curr_tc.contains p.2)
+        |>.map (fun pr ↦ (pr.1.1, pr.2.2))
+      let ret_tc := (step_tc ++ curr_tc).eraseDups
+
+      comp_tc_in n' ret_tc
+
+  comp_tc_in (base_tc.length * base_tc.length) base_tc
+
+-- @[simp] def comp_tc''' {α : Type} (elems : List α) (r : α → α → Prop)
+--   [BEq α] [DecidableEq (α × α)] [DecidableRel r] : Finset (α × α) :=
+--   -- Find all possible relations.
+--   let all := elems.product elems
+--   -- Base step.
+--   let base_tc := Multiset.ofList all |>.filter (fun p ↦ r p.1 p.2)
+--
+--   let rec comp_tc_in (n : Nat) (curr_tc : Finset (α × α)) : Finset (α × α) :=
+--     -- find all the indirect connect ones (Can't be itself).
+--     match n with
+--     | 0 =>
+--       curr_tc
+--     | n' + 1 =>
+--       let new_edges := Finset.biUnion curr_tc (fun p₁ =>
+--       Finset.biUnion curr_tc (fun p₂ =>
+--         if p₁.2 = p₂.1 then
+--           Finset.singleton (p₁.1, p₂.2)
+--         else
+--           Finset.empty
+--       )
+--     )
+--
+--       comp_tc_in n' ret_tc
+--
+--   comp_tc_in (base_tc.card * base_tc.card) base_tc.toFinset
+
+def t := (comp_tc [1, 2, 3] (rel)).toFinset.toSet
+
+#check t ∪ t
+
+#check t
+
+#eval comp_tc [1, 7, 8, 9, 10] (rel)
+
+-- theorem comp_tc_is_tc'
+--   (a b : Event)
+--   (lst : List Event)
+--   (h₁ : a ∈ lst)
+--   (h₂ : b ∈ lst) :
+--   (Relation.TransGen co a b) ↔ (a, b) ∈ comp_tc_co lst := by
+--     apply Iff.intro
+--     {
+--       intro htrans
+--       simp
+--       induction lst with
+--       | cons head tail tail_ih => {
+--         induction htrans with
+--         | single hr => {
+--           unfold comp_tc_co.comp_tc_in
+--           simp
+--           split
+--           {
+--             aesop
+--           }
+--           {
+--             unfold comp_tc_co.comp_tc_in at tail_ih
+--             simp_all
+--             aesop
+--           }
+--         }
+--         | tail => {
+--           unfold comp_tc_co.comp_tc_in at tail_ih
+--           unfold comp_tc_co.comp_tc_in
+--           simp_all
+--
+--         }
+--       }
+--       | nil => {
+--         contradiction
+--       }
+--     }
+--     {
+--       intro comp
+--       _
+--     }
+
+def relComp {α : Type} (r₁ r₂ : List (α × α)) : List (α × α) := sorry
+
+@[simp] def composite {α : Type} (r₁ r₂ : Set (α × α)) : Set (α × α) := {(x, y) | ∃z, (x, z) ∈ r₁ ∧ (z, y) ∈ r₂}
+
+@[simp] def composite_k_times {α : Type} (r : Set (α × α)) (n : Nat) : Set (α × α) :=
+  match n with
+  | 0 => r
+  | n' + 1 => composite r (composite_k_times r n')
+
+@[simp] def composite_star {α : Type} (r : Set (α × α)) : Set (α × α) :=
+  ⋃ k : Nat, composite_k_times r k
+
+def composite_inf {α : Type} [DecidableEq α] (r : Set (α × α)) : Set (α × α) :=
+  OrderHom.lfp (OrderHom.mk (fun s => r ∪ composite r s) (by
+    sorry
+  ))
+
+instance {α : Type} {r : α -> α -> Prop} {a b : α} [DecidableRel r] : Decidable (Relation.TransGen r a b) := sorry
+
+#check po
+
+-- po has only one.
+-- read from has many.
+
+-- Suppose we have two rf candidates.
+-- Now this is wrong, we need try to express it by grouping.
+-- But in the end it's a union.
+@[simp] def rf1 := rf
+@[simp] def rf2 := rf
+
+-- def input : Finset Event := {}
+@[simp] def input_test : Set Nat := {1, 2, 3}
+
+@[simp] def test_singleton : Set (Set (Nat × Nat)) := { {(a, b) | b = i ∧ a ∈ input_test } | i ∈ input_test }
+
+lemma test_sin : {(1, 3), (2, 3), (3, 3)} ∈ test_singleton :=
+  by
+    simp
+    aesop
+
+
+def all_rd : Set Event := { e | e.a.action = read }
+
+def all_wt: Set Event := { e | e.a.action = write }
+
+def rw_pairs1 : Set (Event × Event) := { (a, b) | (a ∈ all_rd) -> (b ∈ all_wt) }
+
+def rw_pairs : Set (Event × Event) := { (a, b) | (a ∈ all_rd) ∧ (b ∈ all_wt) }
+
+def groupByRead : Set (Set (Event × Event)) :=
+  {{ (a, b) | (a, b) ∈ rw_pairs ∧ b = i} | i ∈ all_wt}
+
+def newcross : Set (Set (Event × Event)) := sorry
+
+@[simp] def newunion (a b : Event) : Prop := po a b ∨ co a b
+@[simp] def trans := Relation.TransGen newunion
+
+@[simp] def rt₁ (a b : Event) := rf1 a b ∨ newunion a b
+@[simp] def rt₂ (a b : Event) := rf2 a b ∨ newunion a b
+
+@[simp] def acyc := ¬(∃x : Event, trans x x)
+
+
+@[simp] def retrel (a b : Event) := rt₁ a b ∧ rt₂ a b
+@[simp] def ret := {(a, b) | retrel a b ∧ ¬(Relation.TransGen retrel a b)}
+@[simp] def rfset := {(a, b) | rf1 a b}
+
+#check ret ⊆ rfset
+
+-- We got a big union, we filter out all the set that is acyclic, and then check if they're equal:
 
 end Primitives
