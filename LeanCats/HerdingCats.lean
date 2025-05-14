@@ -490,31 +490,95 @@ theorem seq₁ {α : Type} {r₁ r₂ : α -> α -> Prop} : ∀ x y, (r₁;r₂)
 
   comp_tc_in (base_tc.length * base_tc.length) base_tc
 
--- @[simp] def comp_tc''' {α : Type} (elems : List α) (r : α → α → Prop)
---   [BEq α] [DecidableEq (α × α)] [DecidableRel r] : Finset (α × α) :=
---   -- Find all possible relations.
---   let all := elems.product elems
---   -- Base step.
---   let base_tc := Multiset.ofList all |>.filter (fun p ↦ r p.1 p.2)
---
---   let rec comp_tc_in (n : Nat) (curr_tc : Finset (α × α)) : Finset (α × α) :=
---     -- find all the indirect connect ones (Can't be itself).
---     match n with
---     | 0 =>
---       curr_tc
---     | n' + 1 =>
---       let new_edges := Finset.biUnion curr_tc (fun p₁ =>
---       Finset.biUnion curr_tc (fun p₂ =>
---         if p₁.2 = p₂.1 then
---           Finset.singleton (p₁.1, p₂.2)
---         else
---           Finset.empty
---       )
---     )
---
---       comp_tc_in n' ret_tc
---
---   comp_tc_in (base_tc.card * base_tc.card) base_tc.toFinset
+@[simp] def tc_step
+  (r : Event -> Event -> Prop)
+  (tc : List (Event × Event))
+  (h : ∀p ∈ tc, Relation.TransGen r p.1 p.2)
+  : List (Event × Event) :=
+  tc.filter (fun p ↦ p.2 = p.1) ++ tc
+
+@[simp] def tc_base
+  (r : Event -> Event -> Prop) [DecidableRel r] (elems : List Event) : List (Event × Event) :=
+  let all := elems.product elems
+  all |>.filter (fun p ↦ r p.1 p.2)
+
+lemma tc_base_is_tc
+  {a b : Event}
+  (r : Event -> Event -> Prop)
+  (elems : List Event)
+  [DecidableRel r]
+  : (a, b) ∈ tc_base r elems -> Relation.TransGen r a b :=
+  by
+    intro h
+    simp_all
+    have rab : r a b :=
+      by
+        aesop
+    apply Relation.TransGen.single
+    exact rab
+
+lemma tc_step_contains_prev_tc
+  {a b : Event}
+  {r : Event -> Event -> Prop}
+  (tc : List (Event × Event))
+  (htc : (a, b) ∈ tc)
+  (h : ∀p ∈ tc, Relation.TransGen r p.1 p.2)
+  : (a, b) ∈ tc_step r tc h :=
+  by
+    aesop
+
+lemma tc_step_is_tc
+  {a b : Event}
+  {r : Event -> Event -> Prop}
+  (tc : List (Event × Event))
+  (h : ∀p ∈ tc, Relation.TransGen r p.1 p.2)
+  : (a, b) ∈ tc_step r tc h -> Relation.TransGen r a b :=
+  by
+    aesop
+
+@[simp] def comp_tc_by_lemmas (elems : List Event) (r : Event → Event → Prop)
+  [DecidableRel r] : List (Event × Event) :=
+  let base_tc := tc_base r elems
+
+  let rec comp_tc_in
+    (n : Nat)
+    (curr_tc : List (Event × Event))
+    (r : Event -> Event -> Prop)
+    (h : ∀p ∈ curr_tc, Relation.TransGen r p.1 p.2)
+    [DecidableRel r]
+    : List (Event × Event) :=
+    -- find all the indirect connect ones (Can't be itself).
+    match n with
+    | 0 =>
+      curr_tc
+    | n' + 1 =>
+      let new_tc := tc_step r curr_tc (by apply h)
+
+      comp_tc_in (n') new_tc r (by
+        intro p
+        intro h'
+        apply tc_step_is_tc
+        {
+          have : tc_step r ?tc ?h = tc_step r curr_tc h :=
+          by
+            rfl
+
+          exact h'
+        }
+      )
+
+  comp_tc_in (elems.product elems |> List.length) base_tc r (
+    by
+      intro p
+      intro h
+      apply tc_base_is_tc
+      {
+        have : tc_base r ?elems = tc_base r elems := by
+          rfl
+
+        exact h
+      }
+  )
 
 def t := (comp_tc [1, 2, 3] (rel)).toFinset.toSet
 
@@ -523,48 +587,6 @@ def t := (comp_tc [1, 2, 3] (rel)).toFinset.toSet
 #check t
 
 #eval comp_tc [1, 7, 8, 9, 10] (rel)
-
--- theorem comp_tc_is_tc'
---   (a b : Event)
---   (lst : List Event)
---   (h₁ : a ∈ lst)
---   (h₂ : b ∈ lst) :
---   (Relation.TransGen co a b) ↔ (a, b) ∈ comp_tc_co lst := by
---     apply Iff.intro
---     {
---       intro htrans
---       simp
---       induction lst with
---       | cons head tail tail_ih => {
---         induction htrans with
---         | single hr => {
---           unfold comp_tc_co.comp_tc_in
---           simp
---           split
---           {
---             aesop
---           }
---           {
---             unfold comp_tc_co.comp_tc_in at tail_ih
---             simp_all
---             aesop
---           }
---         }
---         | tail => {
---           unfold comp_tc_co.comp_tc_in at tail_ih
---           unfold comp_tc_co.comp_tc_in
---           simp_all
---
---         }
---       }
---       | nil => {
---         contradiction
---       }
---     }
---     {
---       intro comp
---       _
---     }
 
 def relComp {α : Type} (r₁ r₂ : List (α × α)) : List (α × α) := sorry
 
@@ -606,12 +628,13 @@ lemma test_sin : {(1, 3), (2, 3), (3, 3)} ∈ test_singleton :=
     simp
     aesop
 
+def input : Finset Event := {}
 
 def all_rd : Set Event := { e | e.a.action = read }
 
 def all_wt: Set Event := { e | e.a.action = write }
 
-def rw_pairs1 : Set (Event × Event) := { (a, b) | (a ∈ all_rd) -> (b ∈ all_wt) }
+-- def rw_pairs1 : Set (Event × Event) := { (a, b) | (a ∈ all_rd) -> (b ∈ all_wt) }
 
 def rw_pairs : Set (Event × Event) := { (a, b) | (a ∈ all_rd) ∧ (b ∈ all_wt) }
 
@@ -627,7 +650,6 @@ def newcross : Set (Set (Event × Event)) := sorry
 @[simp] def rt₂ (a b : Event) := rf2 a b ∨ newunion a b
 
 @[simp] def acyc := ¬(∃x : Event, trans x x)
-
 
 @[simp] def retrel (a b : Event) := rt₁ a b ∧ rt₂ a b
 @[simp] def ret := {(a, b) | retrel a b ∧ ¬(Relation.TransGen retrel a b)}
