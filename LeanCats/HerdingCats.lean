@@ -513,7 +513,22 @@ theorem seq₁ {α : Type} {r₁ r₂ : α -> α -> Prop} : ∀ x y, (r₁;r₂)
   | 0 => tc
   | n' + 1 => tc_step_N n' (tc_step' tc)
 
-theorem tc_step_N_add (m n : Nat) (tc : List (Event × Event)) :
+lemma tc_step_N_swap
+  (n : Nat)
+  (tc : List (Event × Event)) :
+  tc_step_N n (tc_step' tc) = tc_step' (tc_step_N n tc) :=
+  by
+    induction n generalizing tc with
+    | zero => {
+      simp
+    }
+    | succ n' h' => {
+      rw [tc_step_N]
+      rw [tc_step_N]
+      rw [h' (tc_step' tc)]
+    }
+
+lemma tc_step_N_add (m n : Nat) (tc : List (Event × Event)) :
   tc_step_N (m + n) tc = tc_step_N n (tc_step_N m tc) := by
   induction m generalizing n with
   | zero =>
@@ -523,13 +538,13 @@ theorem tc_step_N_add (m n : Nat) (tc : List (Event × Event)) :
     have h : tc_step_N (m' + n + 1) tc = tc_step_N (n + 1) (tc_step_N m' tc) :=
       by
         apply ih (n + 1)
-
     nth_rewrite 2 [tc_step_N] at h
     rw [Nat.add_assoc]
     nth_rewrite 2 [Nat.add_comm]
     rw [<-Nat.add_assoc]
     rw [h]
-    _
+    nth_rewrite 2 [tc_step_N_swap]
+    rfl
 
 @[simp] def tc_base
   (r : Event -> Event -> Prop) [DecidableRel r] (elems : List Event) : List (Event × Event) :=
