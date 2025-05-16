@@ -207,15 +207,40 @@ lemma tc_comp_upper_bound
   {a b : Event}
   (r : Event -> Event -> Prop)
   [DecidableRel r]
-  (input : List Event) :
-  a ∈ input
-  -> b ∈ input
-  -> (comp_tc input r) ⊆ input.product input :=
+  (input : List Event)
+  (ha : a ∈ input)
+  (hb : b ∈ input) :
+  (comp_tc input r) ⊆ input.product input :=
   by
-    intro ha hb p hcomp
+    intro p hcomp
     unfold comp_tc at hcomp
     apply (tc_step_N_in_product r (input.product input).length input)
     exact hcomp
+
+lemma tc_comp_upper_bound'
+  {a b : Event}
+  {n : Nat}
+  (r : Event -> Event -> Prop)
+  [DecidableRel r]
+  (input : List Event) :
+  a ∈ input
+  -> b ∈ input
+  -> tc_step_N n (tc_base r input) ⊆ (comp_tc input r) :=
+  by
+    intro ha hb p hcomp
+    unfold comp_tc
+    induction n with
+    | zero => {
+      simp at hcomp
+      have hprod : p ∈ input.product input :=
+      by
+        aesop
+
+      sorry
+    }
+    | succ n' => {
+      sorry
+    }
 
 -- We need to prove, after some iterations the (a, b) won't be changed
 -- The computation is limited by input, so the input.product input is what we can calcuate at most.
@@ -236,3 +261,40 @@ lemma tc_towards_comp_tc
     unfold comp_tc
 
     sorry
+
+theorem tc_comp_is_tc
+  {a b : Event}
+  (r : Event -> Event -> Prop)
+  [DecidableRel r]
+  (input : List Event)
+  (ha : a ∈ input)
+  (hb : b ∈ input) :
+  Relation.TransGen r a b <-> (a, b) ∈ comp_tc input r :=
+  by
+    apply Iff.intro
+    {
+      intro htrans
+      apply tc_towards_comp_tc
+      {
+        exact ha
+      }
+      {
+        exact hb
+      }
+      {
+        exact htrans
+      }
+    }
+    {
+      intro hcomp
+      apply comp_tc_towards_tc
+      {
+        exact ha
+      }
+      {
+        exact hb
+      }
+      {
+        exact hcomp
+      }
+    }
