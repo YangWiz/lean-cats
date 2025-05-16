@@ -1,4 +1,5 @@
 import LeanCats.HerdingCats
+import LeanCats.Data
 
 namespace CatsAST
 
@@ -152,7 +153,7 @@ namespace LitmusAST
 
 structure Instruction where
   line_num : Nat
-  action : Primitives.Action
+  action : Action
 
 -- key: value (x = 0, etc)
 abbrev States := List (String × Nat)
