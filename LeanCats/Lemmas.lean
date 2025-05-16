@@ -63,32 +63,6 @@ lemma tc_step_contains_input
   by
     simp
 
-lemma tc_step_base_is_tc
-  {a b : Event}
-  {r : Event -> Event -> Prop}
-  [DecidableRel r]
-  (input : List Event)
-  : (a, b) ∈ tc_step (tc_base r input) -> Relation.TransGen r a b :=
-  by
-    intro hstep
-    simp at hstep
-    aesop
-    {
-      apply Relation.TransGen.single
-      exact right
-    }
-    {
-      apply Relation.TransGen.single
-      exact right
-    }
-
-lemma tc_step_contains_prev
-  {a b : Event}
-  (tc : List (Event × Event))
-  : (a, b) ∈ tc_step tc -> (a, b) ∈ tc :=
-  by
-    aesop
-
 lemma tc_N_succ_steps_includes_N_succ
   (n : Nat)
   (tc : List (Event × Event))
@@ -175,3 +149,90 @@ lemma comp_tc_towards_tc
     intro h
     apply tc_N_steps_is_tc
     apply h
+
+#eval [1,2,2] ⊆ [1, 2]
+
+lemma tc_base_in_product
+  (r : Event -> Event -> Prop)
+  [DecidableRel r]
+  (input : List Event) :
+  tc_base r input ⊆ input.product input :=
+  by
+    aesop
+
+lemma tc_step_in_product
+  (r : Event -> Event -> Prop)
+  [DecidableRel r]
+  (input : List Event) :
+  tc_step (tc_base r input) ⊆ input.product input :=
+  by
+    aesop
+
+lemma tc_step_N_in_product
+  (r : Event -> Event -> Prop)
+  (n : Nat)
+  [DecidableRel r]
+  (input : List Event) :
+  tc_step_N n (tc_base r input) ⊆ input.product input :=
+  by
+    induction n with
+    | zero => {
+      simp
+    }
+    | succ n' ih => {
+      unfold tc_step_N
+      rw [tc_step_N_swap]
+      rw [tc_step]
+      intro p
+      simp only [List.mem_append]
+      intro h
+
+      cases h with
+      | inl h' => {
+        have pair_in_tcstep : p ∈ tc_step_N n' (tc_base r input) :=
+        by
+          apply List.mem_of_mem_filter
+          exact h'
+
+        exact ih pair_in_tcstep
+      }
+      | inr h' => {
+        exact ih h'
+      }
+    }
+
+-- Every pairs are connected (transitive)
+-- This states that the product contains all the possible results.
+lemma tc_comp_upper_bound
+  {a b : Event}
+  (r : Event -> Event -> Prop)
+  [DecidableRel r]
+  (input : List Event) :
+  a ∈ input
+  -> b ∈ input
+  -> (comp_tc input r) ⊆ input.product input :=
+  by
+    intro ha hb p hcomp
+    unfold comp_tc at hcomp
+    apply (tc_step_N_in_product r (input.product input).length input)
+    exact hcomp
+
+-- We need to prove, after some iterations the (a, b) won't be changed
+-- The computation is limited by input, so the input.product input is what we can calcuate at most.
+
+lemma tc_towards_comp_tc
+  {a b : Event}
+  (r : Event -> Event -> Prop)
+  [DecidableRel r]
+  (input : List Event) :
+  a ∈ input
+  -> b ∈ input
+  -> Relation.TransGen r a b
+  -> (a, b) ∈ comp_tc input r :=
+  by
+    intro ha
+    intro hb
+    intro htrans
+    unfold comp_tc
+
+    sorry
