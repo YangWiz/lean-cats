@@ -456,14 +456,6 @@ abbrev CatEnv := Std.HashMap String RelSet
 
 end mp_test
 
-def seq_prop {α : Type} (r₁ r₂ : α -> α -> Prop) : α -> α -> Prop :=
-  let t1 := Subrelation r₁ r₂
-  sorry
-
-infix:50 (priority:=high) " ; " => seq_prop
-
-theorem seq₁ {α : Type} {r₁ r₂ : α -> α -> Prop} : ∀ x y, (r₁;r₂) x y ↔ ∃z, r₁ x z ∧ r₂ z y := sorry
-
 -- First prove the subset, then use Set to prove TransGen.
 -- The definition of TransGen is:
 -- TransGen r a z if and only if there exists a sequence a r b r ... r z of length at least 1 connecting a to z.
@@ -492,15 +484,7 @@ theorem seq₁ {α : Type} {r₁ r₂ : α -> α -> Prop} : ∀ x y, (r₁;r₂)
 
 -- inductive TransComp where
 --   | base {a b : Event} {r : Event -> Event -> Prop} : r a b -> TransComp
-
 @[simp] def tc_step
-  (r : Event -> Event -> Prop)
-  (tc : List (Event × Event))
-  (h : ∀p ∈ tc, Relation.TransGen r p.1 p.2)
-  : List (Event × Event) :=
-  tc.filter (fun p ↦ p.2 = p.1) ++ tc
-
-@[simp] def tc_step'
   (tc : List (Event × Event))
   : List (Event × Event) :=
   tc.filter (fun p ↦ p.2 = p.1) ++ tc
@@ -511,12 +495,12 @@ theorem seq₁ {α : Type} {r₁ r₂ : α -> α -> Prop} : ∀ x y, (r₁;r₂)
   : List (Event × Event) :=
   match n with
   | 0 => tc
-  | n' + 1 => tc_step_N n' (tc_step' tc)
+  | n' + 1 => tc_step_N n' (tc_step tc)
 
 lemma tc_step_N_swap
   (n : Nat)
   (tc : List (Event × Event)) :
-  tc_step_N n (tc_step' tc) = tc_step' (tc_step_N n tc) :=
+  tc_step_N n (tc_step tc) = tc_step (tc_step_N n tc) :=
   by
     induction n generalizing tc with
     | zero => {
@@ -525,7 +509,7 @@ lemma tc_step_N_swap
     | succ n' h' => {
       rw [tc_step_N]
       rw [tc_step_N]
-      rw [h' (tc_step' tc)]
+      rw [h' (tc_step tc)]
     }
 
 lemma tc_step_N_add (m n : Nat) (tc : List (Event × Event)) :
@@ -569,14 +553,13 @@ lemma tc_base_is_tc
 lemma tc_step_contains_prev_step
   {a b : Event}
   (tc : List (Event × Event))
-  (htc : (a, b) ∈ tc)
-  : (a, b) ∈ tc_step' tc -> (a, b) ∈ tc_step' (tc_step' tc) :=
+  : (a, b) ∈ tc_step tc -> (a, b) ∈ tc_step (tc_step tc) :=
   by
     aesop
 
 lemma tc_step_contains_input
   (tc : List (Event × Event))
-  : tc ⊆ tc_step' tc :=
+  : tc ⊆ tc_step tc :=
   by
     simp
 
@@ -585,7 +568,7 @@ lemma tc_step_base_is_tc
   {r : Event -> Event -> Prop}
   [DecidableRel r]
   (input : List Event)
-  : (a, b) ∈ tc_step' (tc_base r input) -> Relation.TransGen r a b :=
+  : (a, b) ∈ tc_step (tc_base r input) -> Relation.TransGen r a b :=
   by
     intro hstep
     simp at hstep
@@ -602,27 +585,50 @@ lemma tc_step_base_is_tc
 lemma tc_step_contains_prev
   {a b : Event}
   (tc : List (Event × Event))
-  : (a, b) ∈ tc_step' tc -> (a, b) ∈ tc :=
+  : (a, b) ∈ tc_step tc -> (a, b) ∈ tc :=
   by
     aesop
 
---
--- lemma tc_step_is_tc
---   {a b : Event}
---   {r : Event -> Event -> Prop}
---   (tc : List (Event × Event))
---   (h : ∀p ∈ tc, Relation.TransGen r p.1 p.2)
---   : (a, b) ∈ tc_step r tc h -> Relation.TransGen r a b :=
---   by
---     aesop
--- lemma tc_step_N_rw_innner
---   {tc}
---   (n : Nat)
---   : tc_step_N (n+1) (tc) = (tc_step_N (n) (tc_step' tc)) :=
---   by
---     aesop
+lemma tc_N_succ_steps_includes_N_succ
+  (n : Nat)
+  (tc : List (Event × Event))
+  : tc_step_N n tc ⊆ tc_step_N (n+1) tc :=
+    by
+      intro h
+      induction n with
+      | zero => {
+        aesop
+      }
+      | succ n' h' => {
+        intro h''
+        unfold tc_step_N
+        unfold tc_step_N
+        rw [tc_step_N_swap]
+        rw [tc_step_N_swap]
+        apply tc_step_contains_prev_step
+        unfold tc_step_N at h''
+        rw [tc_step_N_swap] at h''
+        exact h''
+      }
+
+#check {} ⊆ {1}
 
 lemma tc_N_steps_in_tc_N_succ
+  {a b : Event}
+  (n : Nat)
+  (tc : List (Event × Event))
+  : (a, b) ∈ tc_step_N (n+1) tc -> (a, b) ∈ tc_step_N (n) tc :=
+    by
+      intro h
+      induction n generalizing tc with
+      | zero => {
+        aesop
+      }
+      | succ n' h' => {
+        apply (h' (tc_step tc)) h
+      }
+
+lemma tc_N_steps_in_tc_N_succ'
   {a b : Event}
   (n : Nat)
   (r : Event -> Event -> Prop)
@@ -631,13 +637,8 @@ lemma tc_N_steps_in_tc_N_succ
   : (a, b) ∈ tc_step_N (n+1) (tc_base r input) -> (a, b) ∈ tc_step_N (n) (tc_base r input) :=
     by
       intro h
-      induction n with
-      | zero => {
-        simp_all
-      }
-      | succ n' h' => {
-        apply h'
-      }
+      apply tc_N_steps_in_tc_N_succ
+      aesop
 
 lemma tc_N_steps_is_tc
   {a b : Event}
@@ -658,7 +659,7 @@ lemma tc_N_steps_is_tc
     }
     | succ n' h'' => {
       apply h''
-      apply tc_N_steps_in_tc_N_succ
+      apply tc_N_steps_in_tc_N_succ'
       exact h'
     }
 
@@ -713,11 +714,6 @@ def relComp {α : Type} (r₁ r₂ : List (α × α)) : List (α × α) := sorry
 
 @[simp] def composite_star {α : Type} (r : Set (α × α)) : Set (α × α) :=
   ⋃ k : Nat, composite_k_times r k
-
-def composite_inf {α : Type} [DecidableEq α] (r : Set (α × α)) : Set (α × α) :=
-  OrderHom.lfp (OrderHom.mk (fun s => r ∪ composite r s) (by
-    sorry
-  ))
 
 instance {α : Type} {r : α -> α -> Prop} {a b : α} [DecidableRel r] : Decidable (Relation.TransGen r a b) := sorry
 
