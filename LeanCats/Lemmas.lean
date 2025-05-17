@@ -150,8 +150,6 @@ lemma comp_tc_towards_tc
     apply tc_N_steps_is_tc
     apply h
 
-#eval [1,2,2] ⊆ [1, 2]
-
 lemma tc_base_in_product
   (r : Event -> Event -> Prop)
   [DecidableRel r]
@@ -217,6 +215,7 @@ lemma tc_comp_upper_bound
     apply (tc_step_N_in_product r (input.product input).length input)
     exact hcomp
 
+-- This is used to prove the fix point.
 lemma tc_comp_upper_bound'
   {a b : Event}
   {n : Nat}
@@ -242,9 +241,21 @@ lemma tc_comp_upper_bound'
       sorry
     }
 
+-- This is the tail definition of the TransGen.
+lemma tc_step_trans
+  {a b c: Event}
+  (prev_tc : List (Event × Event))
+  (h₁ : (a, b) ∈ prev_tc)
+  (h₂ : (b, c) ∈ prev_tc) :
+  (a, c) ∈ tc_step prev_tc :=
+  by
+    simp
+    apply Or.inl
+    sorry
+
 -- We need to prove, after some iterations the (a, b) won't be changed
 -- The computation is limited by input, so the input.product input is what we can calcuate at most.
-
+-- a ∧ b ∈ input means the all possible results are combinations of (a, b)
 lemma tc_towards_comp_tc
   {a b : Event}
   (r : Event -> Event -> Prop)
@@ -259,8 +270,14 @@ lemma tc_towards_comp_tc
     intro hb
     intro htrans
     unfold comp_tc
-
-    sorry
+    induction htrans with
+    | single hrel => {
+      -- TODO(Zhiyang): Every pair in tc_comp is r a b
+      sorry
+    }
+    | tail htrans hrel ih => {
+      sorry
+    }
 
 theorem tc_comp_is_tc
   {a b : Event}
