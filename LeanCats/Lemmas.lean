@@ -287,38 +287,23 @@ lemma tc_step_in_product
   by
     aesop
 
--- lemma tc_step_N_in_product
---   (r : Event -> Event -> Prop)
---   (n : Nat)
---   [DecidableRel r]
---   (input : List Event) :
---   tc_step_N n input (tc_base r input) ⊆ input.product input :=
---   by
---     induction n with
---     | zero => {
---       simp
---     }
---     | succ n' ih => {
---       unfold tc_step_N
---       rw [tc_step_N_swap]
---       rw [tc_step]
---       intro p
---       simp only [List.mem_append]
---       intro h
---
---       cases h with
---       | inl h' => {
---         have pair_in_tcstep : p ∈ tc_step_N n' input (tc_base r input) :=
---         by
---           apply List.mem_of_mem_filter
---           sorry
---
---         exact ih pair_in_tcstep
---       }
---       | inr h' => {
---         exact ih h'
---       }
---     }
+lemma tc_step_N_in_product
+  (n : Nat)
+  (input : List Event)
+  (tc : List (Event × Event))
+  (h : tc ⊆ input.product input) :
+  tc_step_N n input tc ⊆ input.product input :=
+  by
+    induction n with
+    | zero => {
+      simp
+      exact h
+    }
+    | succ n' ih => {
+      unfold tc_step_N
+      rw [tc_step_N_swap]
+      aesop
+    }
 
 -- Every pairs are connected (transitive)
 -- This states that the product contains all the possible results.
@@ -336,37 +321,24 @@ lemma tc_step_in_product
 --     apply (tc_step_N_in_product r (input.length * input.length) input)
 --     exact hcomp
 
--- This is used to prove the fix point.
--- lemma tc_comp_upper_bound'
---   {a b : Event}
---   {n : Nat}
---   (r : Event -> Event -> Prop)
---   [DecidableRel r]
---   (input : List Event) :
---   a ∈ input
---   -> b ∈ input
---   -> tc_step_N n (tc_base r input) ⊆ (comp_tc input r) :=
---   by
---     intro ha hb p hcomp
---     unfold comp_tc
---     induction n with
---     | zero => {
---       simp at hcomp
---       have hprod : p ∈ input.product input :=
---       by
---         aesop
---
---       induction input with
---       | nil => {
---         simp_all
---       }
---       | cons head tail ih => {
---         sorry
---       }
---     }
---     | succ n' => {
---       sorry
---     }
+
+-- We want to calcualte the maximum or minimum pairs we can add for each round.
+-- We need to specify the mimimum rounds that can make sure we can find all the pairs.
+-- Suppose we only filter out one pair in each round, then we need at least (tc.product tc).length to get all the pairs.
+-- 1. First we need to make sure that the input.product input is the upper bound, we can't find any more pair that is out of this bound.
+
+-- Every pairs are connected (transitive)
+-- This states that the product contains all the possible results.
+lemma tc_comp_upper_bound
+  {r : Event -> Event -> Prop}
+  [DecidableRel r]
+  (input : List Event) :
+  (comp_tc input r) ⊆ input.product input :=
+  by
+    unfold comp_tc
+    apply tc_step_N_in_product
+    aesop
+
 
 -- We need to prove, after some iterations the (a, b) won't be changed
 -- The computation is limited by input, so the input.product input is what we can calcuate at most.
