@@ -214,5 +214,4 @@ def relation_inverse {α : Type} (lst : List (α × α)) : List (α × α) :=
 -- def partitiOnX {α : Type} (loc : String) (s : Set α) : Set (Set α) :=
 --   { set |  }
 
-
 end Primitives
