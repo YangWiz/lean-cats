@@ -53,7 +53,7 @@ syntax "co" : keyword
 --   | `(keyword | $n:num) => mkApp #[]
 
 def mkkeyword : Syntax -> MetaM Lean.Expr
-  | `(keyword|emptyset) => return .const ``Primitives.Events.empty []
+  | `(keyword|emptyset) => return .const ``Primitives.write []
   | `(keyword|W) => return .const ``CatsAST.e.w []
   | `(keyword|R) => return .const ``CatsAST.e.r []
   | `(keyword|M) => return .const ``CatsAST.e.m []

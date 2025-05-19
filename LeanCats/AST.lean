@@ -1,4 +1,6 @@
--- AST
+import LeanCats.HerdingCats
+import LeanCats.Data
+
 namespace CatsAST
 
 abbrev Ident := String
@@ -146,3 +148,23 @@ instance : ToString Model where
   toString m := toStringModel m
 
 end CatsAST
+
+namespace LitmusAST
+
+structure Instruction where
+  line_num : Nat
+  action : Action
+
+-- key: value (x = 0, etc)
+abbrev States := List (String × Nat)
+
+structure Program where
+  thread : Nat
+  instructions : List Instruction
+
+structure Litmus where
+  inits : States
+  programs : List Program
+  allowed : States
+
+end LitmusAST

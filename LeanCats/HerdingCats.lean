@@ -1,160 +1,217 @@
-import Init.Data.List
+import Init.Data.List.Basic
 import Mathlib.Data.Set.Basic
 import Mathlib.Data.Rel
+import Mathlib.Logic.Relation
+import Mathlib.Order.FixedPoints
+import Mathlib.Data.Multiset.Basic
+import Mathlib.Data.Finset.Basic
+import Mathlib.Data.Fintype.Basic -- For Fintype
+import LeanCats.Data
 
 namespace Primitives
-
-inductive Thread : Type where
-  | mk: Nat -> Thread
-
-/-
-Actions are of several kinds, which we detail in the course of this article. For now, we
-only consider read and write events relative to memory locations. For example, for the
-location x, we can have a read of the value 0 noted Rx = 0, or a write of the value 1,
-noted Wx = 1. We write proc(e) for the thread holding the event e and addr(e) for its
-address, or memory location.
--/
-inductive Action : Type where
-  | write : String -> String -> Action
-  | read : String -> String -> Action
-
-/-
--/
-structure Event where
-  (id : String)   -- Unique identifier
-  (t_id : Nat)      -- Thread ID
-  (t : Thread)    -- Associated thread
-  (ln : Nat)        -- Line number or position
-  (a : Action) -- Action performed
-
 structure Event₁ where
   po : ℕ
   rf : ℕ
   fr : ℕ
 
-abbrev Events := Set Event
+instance : DecidableEq (Event × Event) :=
+  inferInstance
 
-def EventsM := MonadState Events
+@[simp] def rel.domain (input : List Event) : Finset (Event × Event) :=
+  Multiset.ofList (input.product input) |>.toFinset
 
-def Events.empty : Set Event := {}
+-- We define program order as (e.linenumber < e.linenumber && e.thread_id == e.thread_id)
+-- we define cohenrence order as (e.w.target == e.w.target)
+@[simp] def po (e₁ e₂ : Event) : Prop := e₁.ln < e₂.ln ∧ e₁.t_id == e₂.t_id
+--
+instance (e₁ e₂ : Event) : Decidable (po e₁ e₂) :=
+  show Decidable (e₁.ln < e₂.ln ∧ e₁.t_id == e₂.t_id) from
+    inferInstanceAs (Decidable (_ ∧ _))
+--
+-- def data_dependency (e₁ e₂ : Event) : Prop :=
 
-def Events.write : Set Event := {}
+-- coherence order: successive writes to the same location, if they're in the same thread we need to maintain data-dependency order,
+-- which means the co follows the program order, if they're in different thread, we don't care the line number.
+-- The coherence order gives the order in which all the memory writes to a given location have hit that location in memory
+-- In this article: https://diy.inria.fr/doc/herd.html#note11, they defined how to calculate the cohenrence orders,
+-- but due to the time limitation, we need to reduce the complexities, by just introduce the init write,
+-- and also we'are in the compiler level, we don't need to calculate it using lib,
+@[simp] def co (e₁ e₂ : Event) : Prop :=
+  -- Same location and both are writes
+  (e₁.a.target = e₂.a.target) ∧
+  (e₁.a.action = write) ∧
+  (e₂.a.action = write) ∧
+  -- Different events (irreflexivity), makes sure it's strict order (no cycle).
+  ¬ (e₁ == e₂)
 
-def Events.read : Set Event := {}
+instance (e₁ e₂ : Event) : Decidable (co e₁ e₂) :=
+  inferInstanceAs (Decidable (_ ∧ _ ∧ _ ∧ _))
 
-def Events.memory : Set Event := {}
+-- This get all the possible coherence order for a specific location.
+@[simp] def co.Wx (e : Event) : Prop := sorry
 
-def Events.initial_writes : Set Event := {}
+@[simp] def IW (e : Event) : Prop :=
+  e.a.isFirstWrite
 
-def Events.final_writes : Set Event := {}
+@[simp] def FW (e : Event) : Prop :=
+  e.a.isFinalWrite
 
-def Events.branch : Set Event := {}
+@[simp] def Wx (loc : String) (e : Event) : Prop :=
+  e.a.target = loc
 
-def Events.read_modify_write : Set Event := {}
+@[simp] def Ws (lst : List Event) : List Event := lst.filter (fun e ↦ e.a.action = write)
 
-def Events.fence : Set Event := {}
+-- All events that access to the same location.
+@[simp] def loc (e₁ e₂ : Event) : Prop :=
+  e₁.a.target = e₂.a.target
 
--- We define relation as a set.
-def R.mk {α : Type} (a b : α) : Set (α × α) := {(a, b)}
+-- @[simp] def trans (r : Event -> Event -> Prop) : Set (Event × Event) :=
+--   { p | Relation.TransGen r p.1 p.2 }
 
-def R.add {α : Type} (a b : α) (r : Set (α × α)) := (R.mk a b) ∪ r
-
-def R.empty {α : Type} : Set (α × α) := {}
-
-def R.seq_comp {α : Type} (set₁ set₂ : Set (α × α)) : Set (α × α)
-    := { (x, y) | ∃z, (x, z) ∈ set₁ ∧ (z, y) ∈ set₂}
-
-notation (priority := high) r₁ ";" r₂ => R.seq_comp r₁ r₂
-
--- Define a calculation of cloure in a very inefficient way.
--- def R.closure {α : Type} [DecidableEq α] (set : Set (α × α)) : Set (α × α) :=
---   let iterate (s : Set (α × α)) (a : α) : Set (α × α)  :=
---     let s' := { (x, y) | ∃z, (x, z) ∈ set ∧ (z, y) ∈ set } ∪ s
---     if (∀e, e ∈ s) then s else iterate s'
---   iterate set
-
-/-
-We denote the transitive (resp. reflexive-transitive) closure of a relation r as
-r+ (resp. r∗).
--/
-inductive RStar {α : Type} (set : Set (α × α)) : α → α → Prop
-| base {a b : α} : (a, b) ∈ set → RStar set a b
-| step {a b c : α} : RStar set a b → RStar set b c → RStar set a c
-
-def TransClosure {α : Type} (set : Set (α × α)) : Set (α × α) :=
-  { (a, b) | RStar set a b }
-
-#check {} = {}
-
-def r₁ := R.mk 1 2
-def r₂ := R.add 2 3 r₁
-def r₃ := R.add 4 5 r₂
-
-def r := TransClosure r₃
-
-def R.irreflexive {α : Type} (set : Set (α × α)) : Prop :=
-  ¬ (∃x, (x, x) ∈ set)
-
--- We chouldn't find a cycle after we find all the direct/undirect relations.
-def R.acyclic {α : Type} (set : Set (α × α)) : Prop :=
-  R.irreflexive (TransClosure set)
-
-axiom EventIsUnique (e₁ e₂ : Event) : e₁ ≠ e₂ -- Assume each id is different.
-
-#check Thread.mk 1
-
--- def po₁ := Rel.base test_event test_event_1 RoE.po (by apply EventIsUnique)
--- def po₂ := Rel.base test_event_1 test_event_2 RoE.po (by apply EventIsUnique)
--- #check po₁
-
-def addr (e : Event) : String :=
-  match e.a with
-  | Action.read addr' _ => addr'
-  | Action.write addr' _ => addr'
+@[simp] def irreflexivity {α : Type} (r : α -> α -> Prop) := ¬ (∃ a, (r a a))
 
 
-/- instruction order lifted to events -/
-def Relation.po : Set (Event × Event) := R.empty
+@[simp] def irreflexivity.set {α : Type} (r : Finset (α × α)) :=
+  ¬ (∃ a, (a, a) ∈ r)
 
-/- links a write w to a read r taking its value from w -/
-def Relation.rf : Set (Event × Event) := R.empty
-/- total order over writes to the same memory location -/
-def Relation.co : Set (Event × Event) := R.empty
+@[reducible]
+def rel (a b : Nat) : Prop := b = a + 1
 
-def Relation.fr : Set (Event × Event) := R.empty
+-- instance (a b : Nat) : Decidable (rel a b) :=
+--   show Decidable (rel a b) from
+--     inferInstance (_)
 
-/-
-The function ppo, given an execution (E, po, co, rf), returns the preserved program
-order.
--/
-def Relation.ppo : Set (Event × Event) := R.empty
+-- Input is a list of events.
 
-/- program order restricted to the same memory location -/
-def Relation.po_loc : Set (Event × Event) :=
-  { (x, y) | (x, y) ∈ Relation.po ∧ addr x = addr y }
+def tc_operator {α : Type} (r : α → α → Prop) (s : Set (α × α)) : Set (α × α) :=
+  { (a, b) | r a b} ∪ {(a, c) | ∃ b, (a, b) ∈ s ∧ (b, c) ∈ s}
 
-/- links a read r to a write w′ co-after the write w from which r takes its value -/
-def Relation.com : Set (Event × Event) :=
-  Relation.fr ∪ Relation.rf ∪ Relation.co
+@[simp] def all (input : List Event) : List (Event × Event) := input.product input
 
-/-
-The function fences returns the pairs of events in program order that are separated by
-a fence, when given an execution.
--/
-def Relation.fences : Set (Event × Event) := R.empty
+@[simp] def tc_base
+  (r : Event -> Event -> Prop) [DecidableRel r] (elems : List Event) : List (Event × Event) :=
+  let all := all elems
+  all |>.filter (fun p ↦ r p.1 p.2)
 
-def Relation.WR : Set (Event × Event) := R.empty
+-- inductive TransComp where
+--   | base {a b : Event} {r : Event -> Event -> Prop} : r a b -> TransComp
+@[simp] def tc_step
+  (input : List Event)
+  (tc : List (Event × Event))
+  : List (Event × Event) :=
+  (all input).filter (fun p₁ ↦ (tc.product tc).any (fun p₂ ↦ (p₁.1 = p₂.1.1 ∧ p₁.2 = p₂.2.2 ∧ p₂.1.2 = p₂.2.1))) ++ tc
 
-/-
-We can only reorder WR in TSO, so other orders are preserved.
-TSO has a write buffer so that the write operations maybe propgated out of order.
--/
-def Relation.TSO_ppo : Set (Event × Event) := Relation.po \ Relation.WR
+@[simp] def tc_step_N
+  (n : Nat)
+  (input : List Event)
+  (tc : List (Event × Event))
+  : List (Event × Event) :=
+  match n with
+  | 0 => tc
+  | n' + 1 => tc_step_N n' input (tc_step input tc)
 
-macro "cats_in" : tactic =>
-  `(tactic|
-  (
-    repeat' constructor
-  ))
+@[simp] def comp_tc (elems : List Event) (r : Event → Event → Prop)
+  [DecidableRel r] : List (Event × Event) :=
+  tc_step_N (elems.length) elems (tc_base r elems)
+
+@[simp] def acyclic {α : Type} [BEq α] (tc : List (α × α)) : Bool :=
+  tc.any (fun p => p.1 == p.2)
+
+@[simp] def cyclic {α : Type} [BEq α] (tc : List (α × α)) : Bool :=
+  ¬ (acyclic tc)
+
+-- TransGen: https://leanprover-community.github.io/mathlib4_docs/Init/Core.html#Relation.TransGen
+@[simp] def acyclic_predicates {α : Type} (search_space : List α) (r : α -> α -> Prop) : Prop :=
+  ∀ e ∈ search_space, ¬(∃e, Relation.TransGen r e e)
+
+-- Step 1: Control flow semantics
+-- From write to read.
+@[simp] def rf (e₁ e₂ : Event) : Prop := e₁.a.action == write ∧ e₂.a.action == read ∧ (e₁.a.target == e₂.a.target)
+
+#check rf
+
+instance (e₁ e₂ : Event) : Decidable (rf e₁ e₂) :=
+  show Decidable (e₁.a.action == write ∧ e₂.a.action == read ∧ (e₁.a.target == e₂.a.target)) from
+    inferInstanceAs (Decidable (_ ∧ _ ∧ _))
+
+#synth DecidableRel rf
+
+-- Step 2: Data flow semantics
+-- The read-from relation rf describes, for any given read, from which write this read could have taken its value.
+-- This will give us many possible results for each read event (Wⁿ -> R).
+@[simp] def rf.set : Set (Event × Event) := {(a, b) | rf a b}
+
+-- Set of all the writes.
+def W : Set (Event) := { x | x.a.action = write }
+
+-- def rf (e : Event) : Set (Event × Event) := {(a, b) | b.id == e.id } ∩ rf.all_candidates
+
+-- For each event, they may have one or more candidate
+
+-- We can provide a db to this function so that the caller can fetch the value via index.
+def get_set {α : Type} (db : List (Set α)) (i : Fin db.length) : Set (Set α) := { db.get i }
+
+def db.mk {α : Type} : List (Set α) := []
+def db.add {α : Type} (db : List (Set α)) (elem : Set α) : List (Set α) := db ++ [elem]
+
+partial def groupBySndEq (xs : List (Event × Event)) : List (List (Event × Event)) :=
+  match xs with
+  | [] => []
+  | x :: xs' =>
+    let (equal, rest) := xs'.partition (·.snd == x.snd)
+    (x :: equal) :: groupBySndEq rest
+
+partial def groupByFstEq (xs : List (Event × Event)) : List (List (Event × Event)) :=
+  match xs with
+  | [] => []
+  | x :: xs' =>
+    let (equal, rest) := xs'.partition (·.fst == x.fst)
+    (x :: equal) :: groupBySndEq rest
+
+-- coherence order is already been filtered by the same location, we just use the location of first elem in pair to group them.
+partial def groupByLoc (xs : List (Event × Event)) : List (List (Event × Event)) :=
+  match xs with
+  | [] => []
+  | x :: xs' =>
+    let (equal, rest) := xs'.partition (·.fst.a.target == x.fst.a.target)
+    (x :: equal) :: groupByLoc rest
+
+-- coherence order is already been filtered by the same location, we just use the location of first elem in pair to group them.
+partial def groupByLocEvent (xs : List Event) : List (List Event) :=
+  match xs with
+  | [] => []
+  | x :: xs' =>
+    let (equal, rest) := xs'.partition (·.a.target == x.a.target)
+    (x :: equal) :: groupByLocEvent rest
+
+def List.permutation {α : Type} (lst : List α) : List (List α) :=
+  match lst with
+  | [] => [[]]
+  | x :: xs =>
+    let remains := List.permutation xs
+    remains.foldl (fun acc perm =>
+      acc ++ (List.range (perm.length + 1)).map (fun i =>
+        let (before, after) := perm.splitAt i
+        before ++ [x] ++ after
+      )
+    ) []
+
+-- https://diy.inria.fr/doc/herd.html#sec%3Aprimitive
+-- cartisan product.
+def cross {α : Type} : List (List α) → List (List α)
+  | [] => [[]]
+  | s1 :: s =>
+    let ts := cross s
+    -- We want to put all the element from the head to the remaining result.
+    s1.foldl (fun r e1 =>
+      r ++ ts.map (fun t => e1 :: t)
+    ) []
+
+-- We can inverse the relation (a -> b) to (b -> a).
+def relation_inverse {α : Type} (lst : List (α × α)) : List (α × α) :=
+  lst.map (fun p ↦ (p.snd, p.fst))
+--
+-- def partitiOnX {α : Type} (loc : String) (s : Set α) : Set (Set α) :=
+--   { set |  }
 
 end Primitives
