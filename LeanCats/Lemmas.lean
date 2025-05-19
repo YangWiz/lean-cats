@@ -3,12 +3,10 @@ import LeanCats.HerdingCats
 open Primitives
 
 lemma tc_step_N_swap
-  {r : Event -> Event -> Prop}
-  [DecidableRel r]
   (n : Nat)
   (input : List Event)
   (tc : List (Event × Event)) :
-  tc_step_N n input (tc_step input tc) r = tc_step input (tc_step_N n input tc r) :=
+  tc_step_N n input (tc_step input tc) = tc_step input (tc_step_N n input tc) :=
   by
     induction n generalizing tc with
     | zero => {

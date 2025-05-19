@@ -105,16 +105,14 @@ def tc_operator {α : Type} (r : α → α → Prop) (s : Set (α × α)) : Set 
   (n : Nat)
   (input : List Event)
   (tc : List (Event × Event))
-  (r : Event -> Event -> Prop)
-  [DecidableRel r]
   : List (Event × Event) :=
   match n with
-  | 0 => tc_base r input
-  | n' + 1 => tc_step_N n' input (tc_step input tc) r
+  | 0 => tc
+  | n' + 1 => tc_step_N n' input (tc_step input tc)
 
 @[simp] def comp_tc (elems : List Event) (r : Event → Event → Prop)
   [DecidableRel r] : List (Event × Event) :=
-  tc_step_N (elems.length * elems.length) elems (tc_base r elems) r
+  tc_step_N (elems.length * elems.length) elems (tc_base r elems)
 
 @[simp] def acyclic {α : Type} [BEq α] (tc : List (α × α)) : Bool :=
   tc.any (fun p => p.1 == p.2)
