@@ -86,33 +86,35 @@ def rel (a b : Nat) : Prop := b = a + 1
 def tc_operator {α : Type} (r : α → α → Prop) (s : Set (α × α)) : Set (α × α) :=
   { (a, b) | r a b} ∪ {(a, c) | ∃ b, (a, b) ∈ s ∧ (b, c) ∈ s}
 
--- inductive TransComp where
---   | base {a b : Event} {r : Event -> Event -> Prop} : r a b -> TransComp
-@[simp] def tc_step
-  (tc : List (Event × Event))
-  : List (Event × Event) :=
-  tc.filter (fun p₁ ↦ tc.any (fun p₂ ↦ (p₁.2 = p₂.1))) ++ tc
-
-@[simp] def tc_step_N
-  (n : Nat)
-  (tc : List (Event × Event))
-  : List (Event × Event) :=
-  match n with
-  | 0 => tc
-  | n' + 1 => tc_step_N n' (tc_step tc)
+@[simp] def all (input : List Event) : List (Event × Event) := input.product input
 
 @[simp] def tc_base
   (r : Event -> Event -> Prop) [DecidableRel r] (elems : List Event) : List (Event × Event) :=
-  let all := elems.product elems
+  let all := all elems
   all |>.filter (fun p ↦ r p.1 p.2)
+
+-- inductive TransComp where
+--   | base {a b : Event} {r : Event -> Event -> Prop} : r a b -> TransComp
+@[simp] def tc_step
+  (input : List Event)
+  (tc : List (Event × Event))
+  : List (Event × Event) :=
+  (all input).filter (fun p₁ ↦ (tc.product tc).any (fun p₂ ↦ (p₁.1 = p₂.1.1 ∧ p₁.2 = p₂.2.2 ∧ p₂.1.2 = p₂.2.1))) ++ tc
+
+@[simp] def tc_step_N
+  (n : Nat)
+  (input : List Event)
+  (tc : List (Event × Event))
+  (r : Event -> Event -> Prop)
+  [DecidableRel r]
+  : List (Event × Event) :=
+  match n with
+  | 0 => tc_base r input
+  | n' + 1 => tc_step_N n' input (tc_step input tc) r
 
 @[simp] def comp_tc (elems : List Event) (r : Event → Event → Prop)
   [DecidableRel r] : List (Event × Event) :=
-  tc_step_N (elems.product elems |>.length) (tc_base r elems)
-
-@[simp] def comp_tc' (elems : List Event) (r : Event → Event → Prop)
-  [DecidableRel r] : List (Event × Event) :=
-  tc_step_N (elems.product elems |>.length) (tc_base r elems) |>.eraseDups
+  tc_step_N (elems.length * elems.length) elems (tc_base r elems) r
 
 @[simp] def acyclic {α : Type} [BEq α] (tc : List (α × α)) : Bool :=
   tc.any (fun p => p.1 == p.2)

@@ -3,28 +3,31 @@ import LeanCats.HerdingCats
 open Primitives
 
 lemma tc_step_N_swap
+  {r : Event -> Event -> Prop}
+  [DecidableRel r]
   (n : Nat)
+  (input : List Event)
   (tc : List (Event × Event)) :
-  tc_step_N n (tc_step tc) = tc_step (tc_step_N n tc) :=
+  tc_step_N n input (tc_step input tc) r = tc_step input (tc_step_N n input tc r) :=
   by
     induction n generalizing tc with
     | zero => {
-      simp
+      aesop
     }
     | succ n' h' => {
       rw [tc_step_N]
       rw [tc_step_N]
-      rw [h' (tc_step tc)]
+      rw [h' (tc_step input tc)]
     }
 
-lemma tc_step_N_add (m n : Nat) (tc : List (Event × Event)) :
-  tc_step_N (m + n) tc = tc_step_N n (tc_step_N m tc) := by
+lemma tc_step_N_add (input : List Event) (m n : Nat) (tc : List (Event × Event)) :
+  tc_step_N (m + n) input tc = tc_step_N n input (tc_step_N m input tc) := by
   induction m generalizing n with
   | zero =>
     simp [tc_step_N]
   | succ m' ih =>
     repeat rw [tc_step_N]
-    have h : tc_step_N (m' + n + 1) tc = tc_step_N (n + 1) (tc_step_N m' tc) :=
+    have h : tc_step_N (m' + n + 1) input tc = tc_step_N (n + 1) input (tc_step_N m' input tc) :=
       by
         apply ih (n + 1)
     nth_rewrite 2 [tc_step_N] at h
@@ -35,7 +38,7 @@ lemma tc_step_N_add (m n : Nat) (tc : List (Event × Event)) :
     nth_rewrite 2 [tc_step_N_swap]
     rfl
 
-  lemma tc_base_is_tc
+lemma tc_base_is_tc
   {a b : Event}
   (r : Event -> Event -> Prop)
   (elems : List Event)
@@ -51,22 +54,18 @@ lemma tc_step_N_add (m n : Nat) (tc : List (Event × Event)) :
     exact rab
 
 lemma tc_step_contains_prev_step
+  (input : List Event)
   {a b : Event}
   (tc : List (Event × Event))
-  : (a, b) ∈ tc_step tc -> (a, b) ∈ tc_step (tc_step tc) :=
+  : (a, b) ∈ tc_step input tc -> (a, b) ∈ tc_step input (tc_step input tc) :=
   by
     aesop
 
-lemma tc_step_contains_input
-  (tc : List (Event × Event))
-  : tc ⊆ tc_step tc :=
-  by
-    simp
-
 lemma tc_N_succ_steps_includes_N_succ
+  (input : List Event)
   (n : Nat)
   (tc : List (Event × Event))
-  : tc_step_N n tc ⊆ tc_step_N (n+1) tc :=
+  : tc_step_N n input tc ⊆ tc_step_N (n+1) input tc :=
     by
       intro h
       induction n with
@@ -85,20 +84,83 @@ lemma tc_N_succ_steps_includes_N_succ
         exact h''
       }
 
-lemma tc_N_steps_in_tc_N_succ
-  {a b : Event}
-  (n : Nat)
-  (tc : List (Event × Event))
-  : (a, b) ∈ tc_step_N (n+1) tc -> (a, b) ∈ tc_step_N (n) tc :=
+-- This is the tail definition of the TransGen.
+lemma tc_step_trans
+  {a b c: Event}
+  (input : List Event)
+  (r : Event -> Event -> Prop)
+  [DecidableRel r]
+  (h₁ : (a, b) ∈ tc_base r input)
+  (h₂ : (b, c) ∈ tc_base r input) :
+  (a, c) ∈ tc_step input (tc_base r input) :=
+  by
+    simp
+    apply Or.inl
+    aesop
+
+lemma tc_step_tranGen
+  {a b: Event}
+  (input : List Event)
+  {r : Event -> Event -> Prop}
+  [DecidableRel r]
+  {ha : a ∈ input}
+  {hb : b ∈ input}
+  {tc : List (Event × Event)}
+  (hab : (a, b) ∈ tc_step input (tc))
+  (htrans : ∀a b, (a, b) ∈ tc -> Relation.TransGen r a b) :
+  Relation.TransGen r a b :=
+  by
+    aesop
+    have transaw : Relation.TransGen r a w :=
     by
-      intro h
-      induction n generalizing tc with
-      | zero => {
-        aesop
-      }
-      | succ n' h' => {
-        apply (h' (tc_step tc)) h
-      }
+      apply (htrans a w) left
+
+    have transwb : Relation.TransGen r w b :=
+    by
+      apply (htrans w b) right
+
+    apply Relation.TransGen.trans transaw transwb
+
+lemma tc_step_trans'
+  {a b c: Event}
+  (input : List Event)
+  {ha : a ∈ input}
+  {hb : b ∈ input}
+  {hc : c ∈ input}
+  {tc : List (Event × Event)}
+  (h₁ : (a, b) ∈ tc)
+  (h₂ : (b, c) ∈ tc) :
+  (a, c) ∈ tc_step input (tc) :=
+  by
+    induction tc with
+    | nil => {
+      aesop
+    }
+    | cons head tail tail_ih => {
+      aesop
+    }
+
+lemma tc_step_N_trans
+  {n : Nat}
+  {a b c: Event}
+  (input : List Event)
+  {ha : a ∈ input}
+  {hb : b ∈ input}
+  {hc : c ∈ input}
+  (r : Event -> Event -> Prop)
+  [DecidableRel r]
+  (h₁ : (a, b) ∈ tc_step_N n input (tc_base r input))
+  (h₂ : (b, c) ∈ tc_step_N n input (tc_base r input)) :
+  (a, c) ∈ tc_step_N (n+1) input (tc_base r input) :=
+  by
+    unfold tc_step_N
+    rw [tc_step_N_swap]
+    apply tc_step_trans'
+    exact ha
+    exact hb
+    exact hc
+    exact h₁
+    exact h₂
 
 lemma tc_N_steps_in_tc_N_succ'
   {a b : Event}
@@ -106,33 +168,113 @@ lemma tc_N_steps_in_tc_N_succ'
   (r : Event -> Event -> Prop)
   [DecidableRel r]
   (input : List Event)
-  : (a, b) ∈ tc_step_N (n+1) (tc_base r input) -> (a, b) ∈ tc_step_N (n) (tc_base r input) :=
+  : (a, b) ∈ tc_step_N n input (tc_base r input) -> (a, b) ∈ tc_step_N (n+1) input (tc_base r input) :=
     by
       intro h
-      apply tc_N_steps_in_tc_N_succ
-      aesop
+      induction n with
+      | zero => {
+        aesop
+      }
+      | succ n' ih => {
+        apply tc_N_succ_steps_includes_N_succ
+        apply h
+      }
+
+lemma tc_step_base_transGen
+  {a b: Event}
+  (input : List Event)
+  {ha : a ∈ input}
+  {hb : b ∈ input}
+  {r : Event -> Event -> Prop}
+  [DecidableRel r]
+  (h : (a, b) ∈ tc_step input (tc_base r input)) :
+  Relation.TransGen r a b :=
+  by
+    simp_all
+    aesop
+    {
+      have hawTrans : Relation.TransGen r a w :=
+      by
+        apply Relation.TransGen.single
+        exact right_1
+
+      have hwbTrans : Relation.TransGen r w b :=
+      by
+        apply Relation.TransGen.single
+        exact right
+
+      apply Relation.TransGen.trans hawTrans hwbTrans
+    }
+    {
+      apply Relation.TransGen.single
+      exact h_2
+    }
+
+lemma TransGen_tc_step
+  {a b c: Event}
+  (input : List Event)
+  {ha : a ∈ input}
+  {hc : c ∈ input}
+  {r : Event -> Event -> Prop}
+  [DecidableRel r]
+  (tc : List (Event × Event))
+  (habi : (a, b) ∈ tc)
+  (hbci : (b, c) ∈ tc) :
+  (a, c) ∈ tc_step input tc :=
+  by
+    aesop
+
+-- lemma tc_N_steps_is_tc
+--   {a b : Event}
+--   (n : Nat)
+--   (r : Event -> Event -> Prop)
+--   [DecidableRel r]
+--   (input : List Event)
+--   {ha : a ∈ input}
+--   {hb : b ∈ input}
+--   {tc : List (Event × Event)}
+--   : (a, b) ∈ tc_step_N (n+1) input tc -> Relation.TransGen r a b := by
+--     intro h
+--     induction n generalizing tc with
+--     | zero => {
+--       simp_all
+--       apply Relation.TransGen.single
+--       aesop
+--     }
+--     | succ n' ih => {
+--       apply ih
+--       have : tc_step_N (n' + 1) input tc = tc_step_N n' input (tc_step input tc) := rfl
+--       rw [this] at h
+--       exact h
+--     }
 
 lemma tc_N_steps_is_tc
-  {a b : Event}
+  {a b c: Event}
   (n : Nat)
   (r : Event -> Event -> Prop)
   [DecidableRel r]
   (input : List Event)
-  : (a, b) ∈ tc_step_N n (tc_base r input) -> Relation.TransGen r a b := by
+  {ha : a ∈ input}
+  {hb : b ∈ input}
+  {hc : c ∈ input}
+  {tc : List (Event × Event)}
+  : (a, b) ∈ tc_step_N n input (tc_base r input) -> Relation.TransGen r a b := by
     intro h'
     induction n with
     | zero => {
-      simp at h'
-      have hrab : r a b :=
-        by
-          aesop
-      apply Relation.TransGen.single
-      exact hrab
+      apply tc_step_base_transGen
+      exact ha
+      exact hb
+      aesop
     }
     | succ n' h'' => {
-      apply h''
-      apply tc_N_steps_in_tc_N_succ'
-      exact h'
+      unfold tc_step_N at h'
+      rw [tc_step_N_swap] at h'
+      apply tc_step_tranGen at h'
+      rename_i h_step
+
+      apply h'
+      apply tranab
     }
 
 lemma comp_tc_towards_tc
@@ -148,7 +290,9 @@ lemma comp_tc_towards_tc
     unfold comp_tc
     intro h
     apply tc_N_steps_is_tc
-    apply h
+    exact ha
+    exact hb
+    exact h
 
 lemma tc_base_in_product
   (r : Event -> Event -> Prop)
@@ -162,7 +306,7 @@ lemma tc_step_in_product
   (r : Event -> Event -> Prop)
   [DecidableRel r]
   (input : List Event) :
-  tc_step (tc_base r input) ⊆ input.product input :=
+  tc_step input (tc_base r input) ⊆ input.product input :=
   by
     aesop
 
@@ -171,7 +315,7 @@ lemma tc_step_N_in_product
   (n : Nat)
   [DecidableRel r]
   (input : List Event) :
-  tc_step_N n (tc_base r input) ⊆ input.product input :=
+  tc_step_N n input (tc_base r input) ⊆ input.product input :=
   by
     induction n with
     | zero => {
@@ -187,10 +331,10 @@ lemma tc_step_N_in_product
 
       cases h with
       | inl h' => {
-        have pair_in_tcstep : p ∈ tc_step_N n' (tc_base r input) :=
+        have pair_in_tcstep : p ∈ tc_step_N n' input (tc_base r input) :=
         by
           apply List.mem_of_mem_filter
-          exact h'
+          sorry
 
         exact ih pair_in_tcstep
       }
@@ -212,7 +356,7 @@ lemma tc_comp_upper_bound
   by
     intro p hcomp
     unfold comp_tc at hcomp
-    apply (tc_step_N_in_product r (input.product input).length input)
+    apply (tc_step_N_in_product r (input.length * input.length) input)
     exact hcomp
 
 -- This is used to prove the fix point.
@@ -235,23 +379,17 @@ lemma tc_comp_upper_bound'
       by
         aesop
 
-      sorry
+      induction input with
+      | nil => {
+        simp_all
+      }
+      | cons head tail ih => {
+        sorry
+      }
     }
     | succ n' => {
       sorry
     }
-
--- This is the tail definition of the TransGen.
-lemma tc_step_trans
-  {a b c: Event}
-  (prev_tc : List (Event × Event))
-  (h₁ : (a, b) ∈ prev_tc)
-  (h₂ : (b, c) ∈ prev_tc) :
-  (a, c) ∈ tc_step prev_tc :=
-  by
-    simp
-    apply Or.inl
-    sorry
 
 -- We need to prove, after some iterations the (a, b) won't be changed
 -- The computation is limited by input, so the input.product input is what we can calcuate at most.
