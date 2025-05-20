@@ -1,9 +1,11 @@
 inductive Thread : Type where
   | mk: Nat -> Thread
-deriving BEq, Repr, DecidableEq
+deriving Repr, DecidableEq
 
 abbrev write := "write"
 abbrev read := "read"
+
+#synth LawfulBEq Thread
 
 /-
 Actions are of several kinds, which we detail in the course of this article. For now, we
@@ -19,7 +21,7 @@ structure Action : Type where
   value : Option Nat
   isFirstWrite : Bool
   isFinalWrite : Bool
-deriving BEq, Repr, DecidableEq
+deriving Repr, DecidableEq
 
 /-
 -/
@@ -29,4 +31,4 @@ structure Event where
   (t : Thread)    -- Associated thread
   (ln : Nat)        -- Line number or position
   (a : Action) -- Action performed
-deriving BEq, Repr, DecidableEq
+deriving Repr, DecidableEq

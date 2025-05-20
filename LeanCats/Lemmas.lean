@@ -305,6 +305,23 @@ lemma tc_step_N_in_product
       aesop
     }
 
+lemma tc_base_in_tc_step_N
+  {r}
+  [DecidableRel r]
+  (n : Nat)
+  (input : List Event) :
+  tc_base r input ⊆ tc_step_N n input (tc_base r input) :=
+  by
+    induction n with
+    | zero => {
+      simp
+    }
+    | succ n' ih => {
+      unfold tc_step_N
+      rw [tc_step_N_swap]
+      aesop
+    }
+
 -- Every pairs are connected (transitive)
 -- This states that the product contains all the possible results.
 -- lemma tc_comp_upper_bound
@@ -326,6 +343,7 @@ lemma tc_step_N_in_product
 -- We need to specify the mimimum rounds that can make sure we can find all the pairs.
 -- Suppose we only filter out one pair in each round, then we need at least (tc.product tc).length to get all the pairs.
 -- 1. First we need to make sure that the input.product input is the upper bound, we can't find any more pair that is out of this bound.
+-- 2. We split the tc_comp, for a b in it, we can find TransGen (a, b) ∧ TransGen (b, c) in previous round, for a b we can need to find (a, e) and (e, b) ...
 
 -- Every pairs are connected (transitive)
 -- This states that the product contains all the possible results.
@@ -339,19 +357,18 @@ lemma tc_comp_upper_bound
     apply tc_step_N_in_product
     aesop
 
-
 -- We need to prove, after some iterations the (a, b) won't be changed
 -- The computation is limited by input, so the input.product input is what we can calcuate at most.
 -- a ∧ b ∈ input means the all possible results are combinations of (a, b)
 lemma tc_towards_comp_tc
-  {a b : Event}
+  {a c : Event}
   (r : Event -> Event -> Prop)
   [DecidableRel r]
   (input : List Event) :
   a ∈ input
-  -> b ∈ input
-  -> Relation.TransGen r a b
-  -> (a, b) ∈ comp_tc input r :=
+  -> c ∈ input
+  -> Relation.TransGen r a c
+  -> (a, c) ∈ comp_tc input r :=
   by
     intro ha
     intro hb
@@ -359,11 +376,30 @@ lemma tc_towards_comp_tc
     unfold comp_tc
     induction htrans with
     | single hrel => {
-      -- TODO(Zhiyang): Every pair in tc_comp is r a b
-      sorry
+      rename_i b
+      apply tc_base_in_tc_step_N
+      simp
+      apply And.intro
+      apply And.intro
+      exact ha
+      exact hb
+      exact hrel
     }
     | tail htrans hrel ih => {
       sorry
+      -- rename_i b
+      -- rename_i c
+      -- induction input with
+      -- | nil => {
+      --   simp_all
+      -- }
+      -- | cons head tail tail_ih => {
+      --   apply tc_step_N_trans
+      --   exact ha
+      --   exact hb
+      --   exact hb
+      -- }
+      -- _
     }
 
 theorem tc_comp_is_tc
@@ -402,3 +438,14 @@ theorem tc_comp_is_tc
         exact hcomp
       }
     }
+
+instance
+  {a b : Event}
+  {r : Event -> Event -> Prop}
+  [DecidableRel r]
+  (input : List Event)
+  (ha : a ∈ input)
+  (hb : b ∈ input) : Decidable (Relation.TransGen r a b) :=
+  by
+    rw [tc_comp_is_tc r input ha hb]
+    apply List.instDecidableMemOfLawfulBEq
