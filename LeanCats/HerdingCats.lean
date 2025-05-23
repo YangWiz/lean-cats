@@ -14,6 +14,10 @@ structure Event₁ where
   rf : ℕ
   fr : ℕ
 
+#check List
+
+#check Relation.TransGen
+
 instance : DecidableEq (Event × Event) :=
   inferInstance
 
@@ -23,10 +27,13 @@ instance : DecidableEq (Event × Event) :=
 -- We define program order as (e.linenumber < e.linenumber && e.thread_id == e.thread_id)
 -- we define cohenrence order as (e.w.target == e.w.target)
 @[simp] def po (e₁ e₂ : Event) : Prop := e₁.ln < e₂.ln ∧ e₁.t_id == e₂.t_id
+
+@[simp] def bound.po (bound : List Event) (e₁ e₂ : Event) : Prop := e₁.ln < e₂.ln ∧ e₁.t_id == e₂.t_id ∧ e₁ ∈ bound ∧ e₂ ∈ bound
 --
 instance (e₁ e₂ : Event) : Decidable (po e₁ e₂) :=
   show Decidable (e₁.ln < e₂.ln ∧ e₁.t_id == e₂.t_id) from
     inferInstanceAs (Decidable (_ ∧ _))
+
 --
 -- def data_dependency (e₁ e₂ : Event) : Prop :=
 
@@ -81,8 +88,11 @@ def rel (a b : Nat) : Prop := b = a + 1
 --   show Decidable (rel a b) from
 --     inferInstance (_)
 
--- Input is a list of events.
+def getPathLength (h_trans_gen : Relation.TransGen r a c) : Nat :=
+  match h_trans_gen with
+  | single => 1
 
+-- Input is a list of events.
 def tc_operator {α : Type} (r : α → α → Prop) (s : Set (α × α)) : Set (α × α) :=
   { (a, b) | r a b} ∪ {(a, c) | ∃ b, (a, b) ∈ s ∧ (b, c) ∈ s}
 
@@ -95,12 +105,70 @@ def tc_operator {α : Type} (r : α → α → Prop) (s : Set (α × α)) : Set 
 
 -- inductive TransComp where
 --   | base {a b : Event} {r : Event -> Event -> Prop} : r a b -> TransComp
+-- (1, 2) (2, 3) (3, 4) (4, 5)
+-- (1, 2) (2, 3) (3, 4) (4, 5) (1, 3) (2, 4) (3, 5)
+-- (1, 2) (2, 3) (3, 4) (4, 5) (1, 3) (2, 4) (3, 5) (1, 4) (2, 5) (1, 5)
+
+-- We know there will be a fix-point that when (tc.product tc).any is false, then the tc_step won't produce more results.
 @[simp] def tc_step
   (input : List Event)
   (tc : List (Event × Event))
   : List (Event × Event) :=
   (all input).filter (fun p₁ ↦ (tc.product tc).any (fun p₂ ↦ (p₁.1 = p₂.1.1 ∧ p₁.2 = p₂.2.2 ∧ p₂.1.2 = p₂.2.1))) ++ tc
 
+@[simp] def is_transitive
+  (db : List (Event × Event)) -- database
+  (rel: (Event × Event))
+  : Bool
+  := (db.product db).any (fun joint_rel ↦ (rel.1 = joint_rel.1.1 ∧ rel.2 = joint_rel.2.2 ∧ joint_rel.1.2 = joint_rel.2.1))
+
+-- This can give us one transition step, if we want to keep anything in the input,
+-- The transition step is the elems.length
+-- We define a function that computes the most length we need.
+
+-- This is the descending version of transitive closure step.
+@[simp] def tc_step'
+  (bound: List (Event × Event))
+  (tc : List (Event × Event))
+  : List (Event × Event) :=
+  bound.filter (is_transitive tc) ++ tc
+
+-- This is the descending version of transitive closure N steps.
+-- Essentially, it's get some data out of the bound (all pairs).
+@[simp] def tc_step_N'
+  (n : Nat)
+  (bound : List (Event × Event))
+  (tc : List (Event × Event))
+  : List (Event × Event) :=
+  match n with
+  | 0 => tc
+  | n' + 1 =>
+    let prev_tc := tc_step' bound tc
+    let filtered_bound := bound.filter (fun p ↦ p ∉ prev_tc)
+    tc_step_N' n' filtered_bound (prev_tc)
+
+-- To prove, if it remains same with n and n+1 rounds, then n+1+n' is also same.
+-- lemma fixpoint
+--   : tc_step_N' n bound tc = tc_step_N' (n+1) bound tc -> tc_step_N' n bound tc = tc_step_N' (n + n') bound tc :=
+--   by
+--     intro h₁
+--     induction n with
+--     | zero => {
+--       unfold tc_step_N'
+--       split
+--       {
+--         rfl
+--       }
+--       {
+--         aesop
+--         unfold is_transitive
+--         aesop
+--       }
+--     }
+--     | succ n' ih => {
+--
+--     }
+--
 @[simp] def tc_step_N
   (n : Nat)
   (input : List Event)
@@ -113,6 +181,38 @@ def tc_operator {α : Type} (r : α → α → Prop) (s : Set (α × α)) : Set 
 @[simp] def comp_tc (elems : List Event) (r : Event → Event → Prop)
   [DecidableRel r] : List (Event × Event) :=
   tc_step_N (elems.length) elems (tc_base r elems)
+
+-- Well founded computation, maybe eaiser to prove.
+@[simp] def comp_tc_by_wd (events: List Event) (r : Event -> Event -> Prop)
+  [DecidableRel r] : List (Event × Event) :=
+  let direct_tc := tc_base r events
+
+  let rec comp (diff_before : Nat) (bound : List (Event × Event)) (tc : List (Event × Event)) : List (Event × Event) :=
+    let new_tc := tc_step' bound tc
+    let filtered_bound := bound.filter (fun p ↦ p ∉ new_tc)
+
+    if bound.length = diff_before then
+      tc
+    else
+      comp filtered_bound.length filtered_bound new_tc
+
+  termination_by (diff_before)
+  decreasing_by by
+
+  comp ((all events).length - direct_tc.length) (all events) direct_tc
+
+-- Then this comp_tc' becomes move the data from (all input) to another (tc)
+-- We know this tc is always decreasing, and after N times, it will remain same.
+-- N times later it will contain all the TransGen that is in tc.
+-- We just need to prove that after N times, you can't find more TransGen
+-- Then we know all TransGen is in the tc_step_N
+-- Because all the possible pairs are bouneded by the all input.
+-- It's a transformation from a larger set to a subet.
+-- And it's monotonic.
+-- THere will be a point that all the current.
+@[simp] def comp_tc' (elems : List Event) (r : Event → Event → Prop)
+  [DecidableRel r] : List (Event × Event) :=
+  tc_step_N' (elems.length) (all elems) (tc_base r elems)
 
 @[simp] def acyclic {α : Type} [BEq α] (tc : List (α × α)) : Bool :=
   tc.any (fun p => p.1 == p.2)
@@ -210,9 +310,20 @@ def cross {α : Type} : List (List α) → List (List α)
 -- We can inverse the relation (a -> b) to (b -> a).
 def relation_inverse {α : Type} (lst : List (α × α)) : List (α × α) :=
   lst.map (fun p ↦ (p.snd, p.fst))
---
--- def partitiOnX {α : Type} (loc : String) (s : Set α) : Set (Set α) :=
---   { set |  }
 
+-- Iterative application of tc_step
+def S_iter (k : Nat) (elems : List Event) (initial_tc : List (Event × Event)) : List (Event × Event) :=
+  match k with
+  | 0 => initial_tc
+  | Nat.succ k_prev => tc_step elems (S_iter k_prev elems initial_tc)
+
+-- Prove that tc_step_N is equivalent to S_iter
+lemma tc_step_N_eq_S_iter (n : Nat) (elems : List Event) (initial_tc : List (Event × Event)) :
+    tc_step_N n elems initial_tc = S_iter n elems initial_tc := by
+  induction n with
+  | zero => simp [tc_step_N, S_iter]
+  | succ n' ih =>
+    rw [tc_step_N, S_iter]
+    rw [<-ih]
 
 end Primitives

@@ -32,3 +32,11 @@ structure Event where
   (ln : Nat)        -- Line number or position
   (a : Action) -- Action performed
 deriving Repr, DecidableEq
+
+class BoundedRel {α} (r : List α -> α -> α -> Prop) (input : List α) where
+  bound : ∀a b, (r input) a b -> a ∈ input ∧ b ∈ input
+  -- This bound means the TransGen r a b -> a b ∈ input
+
+-- Because all imm must be in the input, we can't find any imm that is out of the input list.
+-- So all the imm is in the input.
+-- We need to connect imm with the step_N, so that step_N input.length will include all the imm, then use ⊆ we can conclude it.  def find_imm {a b : Event}
