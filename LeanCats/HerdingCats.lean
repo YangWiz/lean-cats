@@ -7,6 +7,8 @@ import Mathlib.Data.Multiset.Basic
 import Mathlib.Data.Finset.Basic
 import Mathlib.Data.Fintype.Basic -- For Fintype
 import LeanCats.Data
+import Mathlib.Tactic.Linarith.Frontend
+
 
 namespace Primitives
 structure Event₁ where
@@ -214,5 +216,291 @@ def relation_inverse {α : Type} (lst : List (α × α)) : List (α × α) :=
 -- def partitiOnX {α : Type} (loc : String) (s : Set α) : Set (Set α) :=
 --   { set |  }
 
+
+@[simp] def is_transitive
+  (db : List (Event × Event)) -- database
+  (rel: (Event × Event))
+  : Bool
+  := (db.product db).any (fun joint_rel ↦ (rel.1 = joint_rel.1.1 ∧ rel.2 = joint_rel.2.2 ∧ joint_rel.1.2 = joint_rel.2.1))
+
+-- This can give us one transition step, if we want to keep anything in the input,
+-- The transition step is the elems.length
+-- We define a function that computes the most length we need.
+
+-- This is the descending version of transitive closure step.
+@[simp] def tc_step'
+  (bound: List (Event × Event))
+  (tc : List (Event × Event))
+  : List (Event × Event) :=
+  bound.filter (is_transitive tc) ++ tc
+
+@[simp] def tc_step_N'
+  (n : Nat)
+  (bound : List (Event × Event))
+  (tc : List (Event × Event))
+  : List (Event × Event) :=
+  match n with
+  | 0 => tc
+  | n' + 1 =>
+    let prev_tc := tc_step' bound tc
+    let filtered_bound := bound.filter (fun p ↦ p ∉ prev_tc)
+    tc_step_N' n' filtered_bound (prev_tc)
+
+-- @[simp] def tc_step_wd
+--   (bound : List (Event × Event))
+--   (tc : List (Event × Event))
+--   : List (Event × Event) :=
+--     let prev_tc := tc_step' bound tc
+--     let filtered_bound := bound.filter (fun p ↦ p ∉ prev_tc)
+--
+--     if h : filtered_bound.length < bound.length then
+--       tc_step_wd filtered_bound (prev_tc)
+--     else
+--       prev_tc
+--
+--     termination_by bound.length
+--     decreasing_by exact h
+lemma len2large
+  {bound : List (Event × Event)}
+  {tc : List (Event × Event)}
+  (h : ∃ a b, (a, b) ∈ bound ∧ ∃ x, (a, x) ∈ tc ∧ (x, b) ∈ tc)
+  : (bound.filter (is_transitive tc)).length > 0 :=
+  by
+    unfold is_transitive
+    aesop
+
+lemma tc_step'_bounded (bound tc : List (Event × Event)) :
+  tc.length < (tc_step' bound tc).length → (tc_step' bound tc).length ≤ bound.length := by
+  sorry -- You've already proven this
+
+@[simp] def tc_step_wd'
+ (bound : List (Event × Event))
+ (tc : List (Event × Event))
+ : List (Event × Event) :=
+let new_tc := tc_step' bound tc
+if new_tc.length <= tc.length then
+  tc
+else
+  tc_step_wd' bound new_tc
+termination_by bound.length * bound.length - tc.length
+
+@[simp] def length_to_subset
+  (bound : List (Event × Event))
+  (tc : List (Event × Event))
+  (h : (bound.filter (fun p ↦ p ∉ tc_step' bound tc)).length < bound.length)
+  : (bound.filter (fun p ↦ p ∉ tc_step' bound tc)) ⊆ bound :=
+  by
+    -- unfold tc_step' at *
+    simp
+
+@[simp] def comp_tc_wd
+  (input : List Event)
+  (r : Event -> Event -> Prop)
+  [DecidableRel r]
+  : List (Event × Event) :=
+  let bound := all input
+
+  let rec tc_step_wd'
+    (tc : List (Event × Event))
+    : List (Event × Event) :=
+    let new_tc := tc_step' bound tc
+    if new_tc.length <= tc.length then
+      tc
+    else
+      tc_step_wd' new_tc
+
+    termination_by bound.length - tc.length
+    decreasing_by {
+      unfold bound
+    }
+
+  tc_step_wd' (all input) (all input |>.filter (fun p ↦ r p.1 p.2))
+
+lemma tc_step'_contains_tc :
+  ∀ p, p ∈ tc → p ∈ tc_step' bound tc :=
+  by
+    intro p
+    intro h
+    unfold tc_step'
+    aesop
+
+lemma tc_step_trans
+  {a b c : Event}
+  {bound tc : List (Event × Event)}
+  (hab : (a, b) ∈ tc)
+  (hbc : (b, c) ∈ tc)
+  (bac : (a, c) ∈ bound)
+  : (a, c) ∈ tc_step' bound tc :=
+  by
+    unfold tc_step'
+    aesop
+
+lemma comp_tc_wd_t
+  {a b c : Event}
+  (r : Event -> Event -> Prop)
+  [DecidableRel r]
+  (input : List Event)
+  (hab : (a, b) ∈ tc_step_wd (List.filter (fun p => decide (p ∉ tc_step' bound tc)) bound) (tc_step' bound tc))
+  (hbc : r b c)
+  : (a, c) ∈ tc_step_wd bound tc :=
+  by
+    unfold tc_step_wd
+    unfold_let
+    split
+    {
+      rename_i h
+
+    }
+    {
+      rename_i h
+    }
+
+lemma comp_tc_wd_transivitity
+  {a b c : Event}
+  (r : Event -> Event -> Prop)
+  [DecidableRel r]
+  (input : List Event)
+  (hab : (a, b) ∈ tc_step_wd bound tc)
+  (hbc : r b c)
+  : (a, c) ∈ tc_step_wd bound tc :=
+  by
+    unfold tc_step_wd at *
+    unfold_let at *
+    split
+    {
+      rename_i h
+      split at hab
+      {
+        rename_i h'
+
+      }
+      {
+        contradiction
+      }
+    }
+    {
+      rename_i h
+      split at hab
+      {
+        contradiction
+      }
+      {
+        unfold tc_step' at *
+        unfold is_transitive at *
+        simp_all
+        aesop
+        {
+          apply Or.intro_left
+          apply And.intro
+          {
+          }
+          {
+            apply Exists.intro w
+          }
+        }
+        {
+
+        }
+      }
+    }
+
+lemma comp_tc_wd_transivitity'
+  {a b c : Event}
+  (r : Event -> Event -> Prop)
+  [DecidableRel r]
+  (input : List Event)
+  (hab : (a, b) ∈ comp_tc_wd input r)
+  (hbc : r b c)
+  : (a, c) ∈ comp_tc_wd input r :=
+  by
+    unfold comp_tc_wd at *
+    unfold tc_step_wd at *
+    unfold_let at *
+    split
+    {
+      rename_i h
+      split at hab
+      {
+        rename_i h'
+
+      }
+      {
+        rename_i h'
+        contradiction
+      }
+    }
+    {
+      rename_i h
+      split at hab
+      {
+        rename_i h'
+        contradiction
+      }
+      {
+        rename_i h'
+      }
+    }
+
+lemma tc_towards_comp_tc
+  {a c : Event}
+  (r : Event -> Event -> Prop)
+  [DecidableRel r]
+  (input : List Event) :
+  Relation.TransGen (fun x y ↦ r x y ∧ x ∈ input ∧ y ∈ input) a c
+  -> (a, c) ∈ comp_tc_wd input r :=
+  by
+    intro htrans
+    induction htrans with
+    | single hrel => {
+      rename_i b
+      sorry
+    }
+    | tail htrans hrel ih => {
+      rename_i c'
+      rename_i b'
+      apply comp_tc_wd_transivitity'
+      exact ih
+      -- (b', c') is in base, so it works.
+      apply hrel.1
+    }
+
+lemma tc_step_wd_contains_all
+  (bound : List (Event × Event))
+  (tc : List (Event × Event)) :
+  ∀n, tc_step_N' n bound tc ⊆ tc_step_wd bound tc :=
+  by
+    intro n
+    induction n with
+    | zero => {
+      unfold tc_step_N'
+      unfold tc_step_wd
+      unfold_let
+      split
+      {
+      }
+      {
+
+      }
+    }
+    | succ n' ih => {
+
+    }
+
+def alternate : (xs ys : List α) → List α
+  | [], ys => ys
+  | x::xs, ys => x :: alternate ys xs
+termination_by xs ys => xs.length + ys.length
+
+theorem length_alternate1 (xs ys : List α) :
+    (alternate xs ys).length = xs.length + ys.length := by
+  unfold alternate
+  split
+  next => simp
+  next x xs =>
+    have ih := length_alternate1 ys xs
+    simp [ih]
+    omega
+
+termination_by xs.length + ys.length
 
 end Primitives

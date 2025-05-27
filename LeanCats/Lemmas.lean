@@ -357,6 +357,41 @@ lemma tc_comp_upper_bound
     apply tc_step_N_in_product
     aesop
 
+-- The set will always increase.
+lemma tc_comp_N_monotonic
+  {i k : Nat}
+  {tc : List (Event × Event)}
+  (r : Event -> Event -> Prop)
+  [DecidableRel r]
+  (input : List Event) :
+  tc_step_N i input tc ⊆ tc_step_N (i+k) input tc :=
+  by
+    rw [tc_step_N_add]
+    induction k with
+    | zero => {
+      simp
+    }
+    | succ n' ih => {
+      rw [tc_step_N]
+      rw [tc_step_N_swap]
+      aesop
+    }
+
+-- If we use tc_step_N', then we use the length to measure the end of the computation.
+
+lemma tc_comp_N_fixpoint
+  {i k : Nat}
+  {tc : List (Event × Event)}
+  (r : Event -> Event -> Prop)
+  [DecidableRel r]
+  (input : List Event)
+  (fp : tc_step input tc ⊆ tc)
+  : (tc_step input tc).dedup = tc.dedup :=
+  by
+    unfold tc_step at *
+    aesop
+    sorry
+
 -- We need to prove, after some iterations the (a, b) won't be changed
 -- The computation is limited by input, so the input.product input is what we can calcuate at most.
 -- a ∧ b ∈ input means the all possible results are combinations of (a, b)
