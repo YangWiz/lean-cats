@@ -1,61 +1,37 @@
-import LeanCats.AST
-import Mathlib.Data.Set.Basic
-import Init.Data.List.Basic
-import Init.System.IO
+import Mathlib.Data.Rel
+import LeanCats.Data
+import Lean
 
-/-
-  The cat language is much inspired by OCaml, featuring immutable bindings, first-class functions, pattern matching, etc.
-  However, cat is a domain specific language, with important differences from OCaml.
+open Lean.Meta Lean Lean.Expr Elab
 
-  Base values are specialised, they are sets of events and relations over events.
-  There are also tags, akin to C enumerations or OCaml “constant” constructors and first class functions. Moreover, events can be extracted from sets and pair of events (element of relations) from relations.
+abbrev R := Rel Event Event
 
-  There are two structured values: tuples of values and sets of values. One should notice that primitive set of events and structured set of events are not the same thing.
-  In fact, the language prevents the construction of structured set of events. Similarily, there are no structured sets of elements of relations, there are only relations.
-  There is a distinction between expressions that evaluate to some value, and instructions that are executed for their effect.
+def test : R := fun a b ↦ true
 
-  A model, or cat program is a sequence of instructions. At startup, pre-defined identifiers are bound to event sets and relations over events.
-  Those pre-defined identifiers describe a candidate execution (in the sense of the memory model). Executing the model means allowing or forbidding that candidate execution.
-
-  -- Identifiers.
-  -- Expressions.
-  -- Instructions.
--/
-
-namespace Cats
-open CatsAST
-open Lean Elab Meta
-
-def empty_set : List Event := []
-
-def mkLit : Syntax -> MetaM Lean.Expr
-  | lit => mkAppM ``CatsAST.liter #[mkStrLit lit.getId.toString]
-
-declare_syntax_cat binOp
-declare_syntax_cat instruction
-declare_syntax_cat expr
-declare_syntax_cat binding
-declare_syntax_cat const
-declare_syntax_cat acyclic
+-- Create fvar for keyword (Abstract interface)
+declare_syntax_cat keyword
 declare_syntax_cat dsl_term
+declare_syntax_cat expr
+declare_syntax_cat binOp
+declare_syntax_cat inst
 declare_syntax_cat comment
 declare_syntax_cat model
 
-syntax binding : instruction
-syntax acyclic : instruction
+syntax "co" : keyword
+syntax "rf" : keyword
+syntax "fr" : keyword
+syntax "po" : keyword
+syntax "emptyset" : keyword
 
+syntax "(*" ident* "*)" : comment
+
+syntax keyword : dsl_term
 syntax num : dsl_term
 syntax ident : dsl_term
 syntax "(" expr ")" : dsl_term
 
-syntax "acyclic" expr ("as" expr)? : acyclic
-syntax "let" expr "=" expr : binding
-
 syntax dsl_term : expr
 syntax binOp : expr
-
-syntax num : const
-syntax str : const
 
 syntax dsl_term "|" expr: binOp
 syntax dsl_term "&" expr: binOp
@@ -63,139 +39,146 @@ syntax dsl_term "^" dsl_term: binOp
 syntax dsl_term "+" dsl_term: binOp
 syntax dsl_term "-" dsl_term: binOp
 
--- syntax (comment+) : model
-syntax instruction* : model
+syntax "let" ident "=" expr : inst
+syntax "acyclic" expr : inst
+syntax "irreflexive" expr : inst
+syntax "empty" expr : inst
 
-mutual -- mutual recursion.
+syntax inst* : model
 
--- It's right associative now.
-partial def mkBinOp : Syntax -> MetaM Lean.Expr
-  | `(binOp | $t:dsl_term | $e:expr) => do
-    let lhs <- mkTerm t
-    let rhs <- mkExpr e
-    mkAppM ``BinOp.union #[lhs, rhs]
-  | `(binOp | $t:dsl_term & $e:expr) => do
-    let lhs <- mkTerm t
-    let rhs <- mkExpr e
-    mkAppM ``BinOp.inter #[lhs, rhs]
-  | _ => do
-    println! "Failed to parse binOp"
-    throwUnsupportedSyntax
+instance : Union (Rel Event Event) where
+  union (r₁ r₂ : Rel Event Event) := λ x y ↦ r₁ x y ∨ r₂ x y
 
-partial def mkExpr : Syntax -> MetaM Lean.Expr
-  | `(expr| $e:binOp ) => do
-    let binop <- mkBinOp e
-    mkAppM ``Expr.binop #[binop]
-  | `(expr| $t:dsl_term ) => do
-    let t <- mkTerm t
-    mkAppM ``Expr.term #[t]
-  | _ => do
-    println! "Failed to parse expr"
-    throwUnsupportedSyntax
+instance : Inter (Rel Event Event) where
+  inter (r₁ r₂ : Rel Event Event) := λ x y ↦ r₁ x y ∧ r₂ x y
 
-partial def mkTerm : Syntax -> MetaM Lean.Expr
-  -- | `(dsl_term | ( $e:expr ) ) => CatsAST.Term.expr <$> (mkExpr e)
+def fr' (rf' : R) (co' : R) (e₁ e₂ : Event) : Prop :=
+  ∃w, w.a.action = write ∧ rf' w e₁ ∧ co' w e₂
+
+def Acyclic (r : Rel Event Event) : Prop
+  := Irreflexive (Relation.TransGen r)
+
+def mkAcyclicExpr (rel : Expr) : MetaM Expr := do
+  mkAppM ``Acyclic #[rel]
+
+def mkIrreflexive (rel : Expr) : MetaM Expr := do
+  mkAppM ``Irreflexive #[rel]
+
+def mkkeyword (rf' co' po' : Expr) : Syntax -> MetaM Expr
+  | `(keyword | emptyset) => return const ``List []
+  | `(keyword | rf) => return rf'
+  | `(keyword | co) => return co'
+  | `(keyword | po) => return po'
+  | `(keyword | fr) => mkAppM `rf #[rf', co']
+  | _ => throwUnsupportedSyntax
+
+@[reducible, simp] def I (x : R) : R := x
+
+mutual
+partial def mkTerm (rf' co' po' : Expr) (ctx : Array Name) : Syntax -> MetaM Lean.Expr
   | `(dsl_term | $lit:ident ) => do
-    mkAppM ``CatsAST.Term.liter #[mkStrLit lit.getId.toString]
+    -- Look up the identifier in the context
+    match ctx.findIdx? (· == lit.getId) with
+    | some idx =>
+      let ret := .app (.const ``I []) (.bvar idx)
+      return ret
+    | none => throwError s!"Unknown identifier: {lit.getId}"
+  | `(dsl_term | $lit:keyword ) => do
+    mkkeyword rf' co' po' lit
   | _ => do
     println! "Failed to parse term"
     throwUnsupportedSyntax
 
-end
-
-def mkBinding : Syntax -> MetaM Lean.Expr
-  | `(binding| let $n = $e ) => do
-    let n <- mkExpr n
-    let e <- mkExpr e
-    mkAppM ``Binding.varbinding #[n, e]
-  -- TODO(Zhiyang) will implement pat binding (function binding) later.
-  | _ => throwUnsupportedSyntax
-
-def mkAcyclic : Syntax -> MetaM Lean.Expr
-  | `(acyclic| acyclic $e ) => do
-    let e <- mkExpr e
-    mkAppM ``Acyclic.expr #[e]
-  | `(acyclic| acyclic $e as $n ) => do
-    let e <- mkExpr e
-    let n <- mkExpr n
-    mkAppM ``AcyclicAs.expr #[n, e]
-  | _ => throwUnsupportedSyntax
---
--- def mkInstruction : Syntax -> Except String Instruction
---   -- | `(instruction| $b:binding) => Instruction.binding <$> (mkBinding b)
---   | `(instruction| $e:expr ) => Instruction.expr <$> (mkExpr e)
---   | `(instruction| $a:acyclic ) => Instruction.acyclic <$> (mkAcyclic a)
---   | _ => throw "Failed to parse statement"
---
-def mkInstruction : Syntax -> MetaM Lean.Expr
-  | `(instruction| $b:binding) => do
-    let binding <- mkBinding b
-    mkAppM ``Instruction.binding #[binding]
-  -- | `(instruction| $e:expr ) => Instruction.expr <$> (mkExpr e)
-  | `(instruction| $a:acyclic ) => do
-    let acyc <- (mkAcyclic a)
-    mkAppM ``Instruction.acyclic #[acyc]
+partial def mkExpr (rf' co' po' : Expr) (ctx : Array Name) : Syntax -> MetaM Lean.Expr
+  | `(expr| $e:binOp ) => do
+    mkBinOp rf' co' po' ctx e
+  | `(expr| $t:dsl_term ) => do
+    -- mkTerm rf' co' po' t
+    mkTerm rf' co' po' ctx t
   | _ => do
-    println! "Failed to parse instruction"
+    println! "Failed to parse expr"
     throwUnsupportedSyntax
 
+partial def mkBinOp (rf' co' po' : Expr) (ctx : Array Name) : Syntax -> MetaM Lean.Expr
+  | `(binOp | $t:dsl_term | $e:expr) => do
+    let lhs <- mkTerm rf' co' po' ctx t
+    let rhs <- mkExpr rf' co' po' ctx e
+    mkAppM ``Union.union #[lhs, rhs]
+  | `(binOp | $t:dsl_term & $e:expr) => do
+    let lhs <- mkTerm rf' co' po' ctx t
+    let rhs <- mkExpr rf' co' po' ctx e
+    mkAppM ``Inter.inter #[lhs, rhs]
+  | _ => do
+    println! "Failed to parse binOp"
+    throwUnsupportedSyntax
+end
 
-#check foldlM
-#check List.map
+-- We need to create a body using recursion (we need to process the left, then this one), so we need a foldr.
+-- We use a nameMap to store store the binding.
+def mkInstruction (rf' co' po' : Expr) (ctx : Array Name) (stx : Syntax) (restIns : Expr) : MetaM Expr :=
+  match stx with
+  | `(inst | let $i:ident = $e:expr) => do
+    logInfo restIns
+    let ret := letE i.getId (.const `R []) (<-mkExpr rf' co' po' ctx e) restIns true
+    logInfo ret
+    return ret
+  | `(inst | acyclic $e:expr) => do
+    let acyc <- mkAppM ``Acyclic #[<-mkExpr rf' co' po' ctx e]
+    mkAppM ``And #[acyc, restIns]
+  | `(inst | irreflexive $e:expr) => do
+    let irfx <- mkAppM ``Irreflexive #[<-mkExpr rf' co' po' ctx e]
+    mkAppM ``And #[irfx, restIns]
+  | _ => throwUnsupportedSyntax
 
--- elab m:model : term => do
---   match m with
---   | `(model| $ins:instruction*) => do
---     let ins_list <- liftMetaM $ Array.mapM mkInstruction ins.raw
---
---     let instructions <- mkListLit (.const ``Instruction []) ins_list.toList
---     mkAppM ``CatsAST.Model.instructions #[instructions]
---   | _ =>
---     println! "Failed to parse model."
---     throwUnsupportedSyntax
+-- This is used to collect all the binders.
+-- We don't support variable shadowing.
+def collectLetBindings (instructions : Array Syntax) : Array Name :=
+  (instructions.filterMap fun stx =>
+    match stx with
+    | `(inst | let $i:ident = $_:expr) => some i.getId
+    | _ => none).reverse
 
-elab m:model : term => do
-  match m with
-  | `(model| $ins:instruction*) => do
-    let ins_list <- liftMetaM $ Array.mapM mkInstruction ins.raw
+section test
+def mkModelTest : Syntax -> MetaM Expr
+  | `(model| $ins:inst* ) => do
+    let rf' : Expr := .const ``test []
+    let co' : Expr := .const ``test []
+    let po' : Expr := .const ``test []
 
-    let instructions <- mkListLit (.const ``Instruction []) ins_list.toList
-    mkAppM ``CatsAST.Model.instructions #[instructions]
+    -- Create the base case (likely True or unit)
+    let baseExpr : Expr := .const ``True []
+    let ctx := collectLetBindings ins.raw
+
+    ins.foldrM (fun stx acc => do
+      let ins := mkInstruction rf' co' po' ctx stx acc
+      ins
+    ) baseExpr
+
   | _ =>
     throwUnsupportedSyntax
 
---
--- #check
---   let a = amo
---
--- abbrev output := IO
---
-def test :=
-  let a := 1
-  let a := 2
+elab ">>" p:model "<<" : term => mkModelTest p
+#reduce >> let a' = rf let b = rf acyclic rf let a = rf acyclic a' <<
+end test
 
-def prog :=
-  let a = rf | fr
-  acyclic a
---
--- #reduce prog
--- def mkAssignment : Syntax -> Except String Assignment
---   | `(Assignment| let $n:name = $e:Expr ) => return (Stmt.assignment (mkExpr e.) (mkExpr e))
---   | _ => throw "Failed to parse assignement statement."
+#check withLocalDeclsDND
 
--- elab v:num : const => mkConst v
+def mkModel : Syntax -> MetaM Expr
+  | `(model| $ins:inst* ) => do
+    withLocalDeclsDND #[(`rf', (.const `R [])), (`co', (.const `R [])), (`po', (.const `R []))] ( λ params ↦ do
+      -- Create the base case (likely True or unit)
+      let baseExpr : Expr := .const ``True []
+      let ctx := collectLetBindings ins.raw
 
-def prop_test (a : Bool) : Prop := ¬ a
+      let body := ins.foldrM (fun stx acc => do
+        let ins := mkInstruction params[0]! params[1]! params[2]! ctx stx acc
+        ins
+      ) baseExpr
 
-def t₁ (a : Prop) := [¬a]
+      mkLambdaFVars params (<-body)
+    )
+  | _ =>
+    throwUnsupportedSyntax
 
--- We get a list of Prop, the Prop is what we need to prove.
-
-
-#reduce prog
-
-#check t₁
-
-end Cats
-
-#check IO String
+elab ">>>" p:model "<<<" : term => mkModel p
+#reduce >>> let a' = rf let b = rf acyclic co let a = rf acyclic a' <<<
