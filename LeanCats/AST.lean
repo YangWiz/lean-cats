@@ -1,10 +1,13 @@
 import LeanCats.HerdingCats
 import LeanCats.Data
+import Lean
 
 namespace CatsAST
+open Lean
 
 abbrev Ident := String
 abbrev liter := Ident -> Ident
+abbrev keyword := Ident -> Ident
 
 def e.w : Ident := "write"
 def e.r : Ident := "read"
@@ -74,11 +77,16 @@ mutual
     toString e := toStringAuxExpr e
 end
 
-
 inductive Stmt
   | expr : Expr -> Stmt
   | comment : String -> Stmt
   | assignment : Expr -> Expr -> Stmt
+
+inductive Stmt' α
+  | acyclic (r : Rel α α) : Stmt' α
+
+def acyclic : Stmt' Event -> Prop
+  | Stmt'.acyclic r => ¬(∃x, Relation.TransGen r x x)
 
 inductive Binding
   -- valbinding ::=	id -> expr
@@ -137,8 +145,6 @@ partial def toStringInstruction : Instruction -> String
 instance : ToString Instruction where
   toString i := toStringInstruction i ++ "; "
 
-#check String.intercalate
-
 partial def toStringModel : Model -> String
   | .instructions is =>
     let instrStrings := is.map toString
@@ -148,23 +154,3 @@ instance : ToString Model where
   toString m := toStringModel m
 
 end CatsAST
-
-namespace LitmusAST
-
-structure Instruction where
-  line_num : Nat
-  action : Action
-
--- key: value (x = 0, etc)
-abbrev States := List (String × Nat)
-
-structure Program where
-  thread : Nat
-  instructions : List Instruction
-
-structure Litmus where
-  inits : States
-  programs : List Program
-  allowed : States
-
-end LitmusAST

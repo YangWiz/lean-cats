@@ -1,8 +1,8 @@
 import LeanCats.AST
-import LeanCats.HerdingCats
 import Mathlib.Data.Set.Basic
 import Init.Data.List.Basic
 import Init.System.IO
+
 /-
   The cat language is much inspired by OCaml, featuring immutable bindings, first-class functions, pattern matching, etc.
   However, cat is a domain specific language, with important differences from OCaml.
@@ -26,51 +26,9 @@ namespace Cats
 open CatsAST
 open Lean Elab Meta
 
-declare_syntax_cat keyword
--- Predefined sets.
-syntax "emptyset" : keyword -- empty set of events
-syntax "W" : keyword -- write events
-syntax "R" : keyword -- read events
-syntax "M" : keyword -- memory events, We have M = W ∪ R
-syntax "IW" : keyword -- initial writes, feed reads that read from the initial state
-syntax "FW" : keyword -- final writes, writes that are observed at the end of the test execution
-syntax "B" : keyword -- branch events
-syntax "RMW" : keyword -- read-modify-write events
-syntax "F" : keyword -- fence events
+def empty_set : List Event := []
 
--- Predefined relations.
-syntax "po" : keyword -- program order
-syntax "addr" : keyword -- address dependency
-syntax "data" : keyword -- data dependency
-syntax "ctrl" : keyword -- control dependency
-syntax "rmw" : keyword -- read-exclusive write-exclusive pair
-syntax "amo" : keyword -- atomic modify
-syntax "rf" : keyword
-syntax "fr" : keyword
-syntax "co" : keyword
-
--- def elabkeyword : Syntax -> MetaM Expr
---   | `(keyword | $n:num) => mkApp #[]
-
-def mkkeyword : Syntax -> MetaM Lean.Expr
-  | `(keyword|emptyset) => return .const ``Primitives.write []
-  | `(keyword|W) => return .const ``CatsAST.e.w []
-  | `(keyword|R) => return .const ``CatsAST.e.r []
-  | `(keyword|M) => return .const ``CatsAST.e.m []
-  | `(keyword|IW) => return .const ``CatsAST.e.iw []
-  | `(keyword|FW) => return .const ``CatsAST.e.fw []
-  | `(keyword|B) => return .const ``CatsAST.e.b []
-  | `(keyword|RMW) => return .const ``CatsAST.e.rmw []
-  | `(keyword|F) => return .const ``CatsAST.e.f []
-  | `(keyword|po) => return .const ``CatsAST.r.po []
-  | `(keyword|addr) => return .const ``CatsAST.r.addr []
-  | `(keyword|data) => return .const ``CatsAST.r.data []
-  | `(keyword|ctrl) => return .const ``CatsAST.r.ctrl []
-  | `(keyword|rmw) => return .const ``CatsAST.r.rmw []
-  | `(keyword|amo) => return .const ``CatsAST.r.amo []
-  | `(keyword|rf) => return .const ``CatsAST.r.rf []
-  | `(keyword|fr) => return .const ``CatsAST.r.fr []
-  | `(keyword|co) => return .const ``CatsAST.r.co []
+def mkLit : Syntax -> MetaM Lean.Expr
   | lit => mkAppM ``CatsAST.liter #[mkStrLit lit.getId.toString]
 
 declare_syntax_cat binOp
@@ -86,7 +44,6 @@ declare_syntax_cat model
 syntax binding : instruction
 syntax acyclic : instruction
 
-syntax keyword : dsl_term
 syntax num : dsl_term
 syntax ident : dsl_term
 syntax "(" expr ")" : dsl_term
@@ -140,9 +97,6 @@ partial def mkTerm : Syntax -> MetaM Lean.Expr
   -- | `(dsl_term | ( $e:expr ) ) => CatsAST.Term.expr <$> (mkExpr e)
   | `(dsl_term | $lit:ident ) => do
     mkAppM ``CatsAST.Term.liter #[mkStrLit lit.getId.toString]
-  | `(dsl_term | $kw:keyword ) => do
-    let kw <- mkkeyword kw
-    mkAppM ``CatsAST.Term.keyword #[kw]
   | _ => do
     println! "Failed to parse term"
     throwUnsupportedSyntax
@@ -216,8 +170,12 @@ elab m:model : term => do
 --
 -- abbrev output := IO
 --
+def test :=
+  let a := 1
+  let a := 2
+
 def prog :=
-  let a = amo | amo
+  let a = rf | fr
   acyclic a
 --
 -- #reduce prog
@@ -226,6 +184,17 @@ def prog :=
 --   | _ => throw "Failed to parse assignement statement."
 
 -- elab v:num : const => mkConst v
+
+def prop_test (a : Bool) : Prop := ¬ a
+
+def t₁ (a : Prop) := [¬a]
+
+-- We get a list of Prop, the Prop is what we need to prove.
+
+
+#reduce prog
+
+#check t₁
 
 end Cats
 

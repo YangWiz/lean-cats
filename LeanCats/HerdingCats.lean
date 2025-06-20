@@ -20,56 +20,176 @@ instance : DecidableEq (Event × Event) :=
 @[simp] def rel.domain (input : List Event) : Finset (Event × Event) :=
   Multiset.ofList (input.product input) |>.toFinset
 
--- We define program order as (e.linenumber < e.linenumber && e.thread_id == e.thread_id)
--- we define cohenrence order as (e.w.target == e.w.target)
-@[simp] def po (e₁ e₂ : Event) : Prop := e₁.ln < e₂.ln ∧ e₁.t_id == e₂.t_id
---
-instance (e₁ e₂ : Event) : Decidable (po e₁ e₂) :=
-  show Decidable (e₁.ln < e₂.ln ∧ e₁.t_id == e₂.t_id) from
-    inferInstanceAs (Decidable (_ ∧ _))
---
--- def data_dependency (e₁ e₂ : Event) : Prop :=
+@[simp] def rel_incl
+  {α : Type}
+  (E : List α)
+  (r₁ r₂ : List α -> Rel α α)
+  : Prop :=
+  ∀x ∈ E, ∀ y ∈ E, r₁ E x y -> r₂ E x y
 
--- coherence order: successive writes to the same location, if they're in the same thread we need to maintain data-dependency order,
--- which means the co follows the program order, if they're in different thread, we don't care the line number.
--- The coherence order gives the order in which all the memory writes to a given location have hit that location in memory
--- In this article: https://diy.inria.fr/doc/herd.html#note11, they defined how to calculate the cohenrence orders,
--- but due to the time limitation, we need to reduce the complexities, by just introduce the init write,
--- and also we'are in the compiler level, we don't need to calculate it using lib,
-@[simp] def co (e₁ e₂ : Event) : Prop :=
-  -- Same location and both are writes
-  (e₁.a.target = e₂.a.target) ∧
-  (e₁.a.action = write) ∧
-  (e₂.a.action = write) ∧
-  -- Different events (irreflexivity), makes sure it's strict order (no cycle).
-  ¬ (e₁ == e₂)
+instance
+  {α : Type}
+  (E : List α)
+  [DecidableEq α]
+  (r₁ r₂ : List α -> Rel α α)
+  [DecidableRel (r₁ E)]
+  [DecidableRel (r₂ E)]
+  : Decidable (rel_incl E r₁ r₂) :=
+  by
+    simp
+    infer_instance
 
-instance (e₁ e₂ : Event) : Decidable (co e₁ e₂) :=
-  inferInstanceAs (Decidable (_ ∧ _ ∧ _ ∧ _))
+@[simp] def internal (E : List Event) (e₁ e₂ : Event) : Prop
+  := e₁.t_id = e₂.t_id ∧ E.contains e₁ ∧ E.contains e₂
+instance (E : List Event) (e₁ e₂ : Event) : Decidable (internal E e₁ e₂) :=
+  by
+    simp
+    infer_instance
+
+-- transitive_closure rf' co'
+
+variable (rf' co' : Rel Event Event)
+#check ¬ (∃x, Relation.TransGen (fun x y ↦ rf' x y ∨ co' x y) x x)
+
+def test : Prop := 2 = 2
+
+def prop : ∀ prop ∈ [test], prop :=
+by
+  simp
+  intro prop
+  intro h
+  rw [h]
+  unfold test
+  simp
+
+#reduce rf'
+
+-- Declare 'a' and 'b' as natural numbers for the following definitions
+variable (a b : Nat)
+
+-- 'a' and 'b' are implicitly parameters to this definition
+def mySum : Nat := a + b
+
+#eval mySum 1 2
+
+@[simp] def rf (E : List Event) (e₁ e₂ : Event) : Prop
+  := e₁.a.action = write ∧ e₂.a.action = read ∧ (e₁.a.target = e₂.a.target) ∧ e₁.a.value = e₂.a.value ∧ E.contains e₁ ∧ E.contains e₂
+instance (E : List Event) (e₁ e₂ : Event) : Decidable (rf E e₁ e₂) :=
+  by
+    simp
+    infer_instance
+
+@[simp] def po (E : List Event) (e₁ e₂ : Event) : Prop :=
+  e₁.ln < e₂.ln ∧ e₁.t_id = e₂.t_id ∧ internal E e₁ e₂
+instance (E : List Event) (e₁ e₂ : Event) : Decidable (po E e₁ e₂) :=
+  by
+    simp
+    infer_instance
+
+instance (E : List Event) : DecidableRel (po E) :=
+  by
+    infer_instance
+
+@[simp] def pre_co (E : List Event) (e₁ e₂ : Event) : Prop
+  := e₁.a.action = write ∧ e₂.a.action = write ∧ e₁.a.target = e₂.a.target ∧ E.contains e₁ ∧ E.contains e₂
+
+instance (E : List Event) (e₁ e₂ : Event) : Decidable (pre_co E e₁ e₂) :=
+  by
+    simp
+    infer_instance
+
+instance (E : List Event) : DecidableRel (pre_co E) :=
+  by
+    infer_instance
+
+@[simp] def partial_order.strict
+  {α : Type}
+  (r : Rel α α)
+  (E : List α)
+  : Prop :=
+  (∀ x ∈ E, ∀ y ∈ E, ∀ z ∈ E, r x y → r y z → r x z) ∧
+  (∀ x ∈ E, ¬r x x)
+
+instance {α : Type}
+  [DecidableEq α]
+  (r : Rel α α)
+  [DecidableRel r]
+  (E : List α)
+  : Decidable (partial_order.strict r E) :=
+  by
+    simp
+    infer_instance
+
+@[simp] def linear_strict_order {α : Type} (r : Rel α α) (xs : List α) : Prop :=
+  partial_order.strict r xs ∧
+  ∀ x1 ∈ xs, ∀ x2 ∈ xs, x1 ≠ x2 → r x1 x2 ∨ r x2 x1  -- Totality
+
+instance {α : Type} [DecidableEq α]
+  (r : Rel α α) [DecidableRel r] (xs : List α)
+  : Decidable (linear_strict_order r xs) :=
+by
+  simp
+  infer_instance
+
+@[simp] def is_write_same_loc (loc : String) (e : Event) := e.a.action = write ∧ e.a.target = loc
+
+instance (loc : String) (e : Event) : Decidable (is_write_same_loc loc e) :=
+by
+  simp
+  infer_instance
+
+@[simp] def co_well_formed
+  (E : List Event)
+  (locs : List String)
+  (co : List Event -> Rel Event Event)
+  [DecidableRel (co E)]
+  : Prop :=
+  rel_incl E co pre_co ∧
+  ∀loc ∈ locs, linear_strict_order (co E) (E.filter (is_write_same_loc loc))
+
+instance
+  (E : List Event)
+  (locs : List String)
+  (co : List Event -> Rel Event Event)
+  [DecidableRel (co E)]
+  : Decidable (co_well_formed E locs co) :=
+by
+  unfold co_well_formed
+  unfold linear_strict_order
+  infer_instance
+
+@[simp] def fr (E : List Event) (co : List Event -> Rel Event Event) (e₁ e₂ : Event) : Prop :=
+  ∃ w ∈ E, w.a.action = write ∧ rf E w e₁ ∧ co E w e₂
+
+instance
+  (E : List Event)
+  (co : List Event -> Rel Event Event)
+  [DecidableRel (co E)]
+  (e₁ e₂ : Event)
+  : Decidable (fr E co e₁ e₂) :=
+  by
+    simp
+    infer_instance
 
 -- This get all the possible coherence order for a specific location.
 @[simp] def co.Wx (e : Event) : Prop := sorry
 
-@[simp] def IW (e : Event) : Prop :=
+@[simp] def IW.rel (e : Event) : Bool :=
   e.a.isFirstWrite
 
-@[simp] def FW (e : Event) : Prop :=
+@[simp] def FW.rel (e : Event) : Bool :=
   e.a.isFinalWrite
 
-@[simp] def Wx (loc : String) (e : Event) : Prop :=
-  e.a.target = loc
+@[simp] def W.rel (e : Event) : Bool :=
+  e.a.action = write
 
 @[simp] def Ws (lst : List Event) : List Event := lst.filter (fun e ↦ e.a.action = write)
 
 -- All events that access to the same location.
-@[simp] def loc (e₁ e₂ : Event) : Prop :=
+@[simp] def loc.rel (e₁ e₂ : Event) : Bool :=
   e₁.a.target = e₂.a.target
 
--- @[simp] def trans (r : Event -> Event -> Prop) : Set (Event × Event) :=
---   { p | Relation.TransGen r p.1 p.2 }
-
 @[simp] def irreflexivity {α : Type} (r : α -> α -> Prop) := ¬ (∃ a, (r a a))
-
 
 @[simp] def irreflexivity.set {α : Type} (r : Finset (α × α)) :=
   ¬ (∃ a, (a, a) ∈ r)
@@ -77,128 +197,11 @@ instance (e₁ e₂ : Event) : Decidable (co e₁ e₂) :=
 @[reducible]
 def rel (a b : Nat) : Prop := b = a + 1
 
--- instance (a b : Nat) : Decidable (rel a b) :=
---   show Decidable (rel a b) from
---     inferInstance (_)
-
--- Input is a list of events.
-
-def tc_operator {α : Type} (r : α → α → Prop) (s : Set (α × α)) : Set (α × α) :=
-  { (a, b) | r a b} ∪ {(a, c) | ∃ b, (a, b) ∈ s ∧ (b, c) ∈ s}
-
-@[simp] def all (input : List Event) : List (Event × Event) := input.product input
-
-@[simp] def tc_base
-  (r : Event -> Event -> Prop) [DecidableRel r] (elems : List Event) : List (Event × Event) :=
-  let all := all elems
-  all |>.filter (fun p ↦ r p.1 p.2)
-
--- inductive TransComp where
---   | base {a b : Event} {r : Event -> Event -> Prop} : r a b -> TransComp
-@[simp] def tc_step
-  (input : List Event)
-  (tc : List (Event × Event))
-  : List (Event × Event) :=
-  (all input).filter (fun p₁ ↦ (tc.product tc).any (fun p₂ ↦ (p₁.1 = p₂.1.1 ∧ p₁.2 = p₂.2.2 ∧ p₂.1.2 = p₂.2.1))) ++ tc
-
-@[simp] def tc_step_N
-  (n : Nat)
-  (input : List Event)
-  (tc : List (Event × Event))
-  : List (Event × Event) :=
-  match n with
-  | 0 => tc
-  | n' + 1 => tc_step_N n' input (tc_step input tc)
-
-@[simp] def comp_tc (elems : List Event) (r : Event → Event → Prop)
-  [DecidableRel r] : List (Event × Event) :=
-  tc_step_N (elems.length) elems (tc_base r elems)
-
-@[simp] def acyclic {α : Type} [BEq α] (tc : List (α × α)) : Bool :=
-  tc.any (fun p => p.1 == p.2)
-
-@[simp] def cyclic {α : Type} [BEq α] (tc : List (α × α)) : Bool :=
-  ¬ (acyclic tc)
-
--- TransGen: https://leanprover-community.github.io/mathlib4_docs/Init/Core.html#Relation.TransGen
-@[simp] def acyclic_predicates {α : Type} (search_space : List α) (r : α -> α -> Prop) : Prop :=
-  ∀ e ∈ search_space, ¬(∃e, Relation.TransGen r e e)
-
 -- Step 1: Control flow semantics
 -- From write to read.
-@[simp] def rf (e₁ e₂ : Event) : Prop := e₁.a.action == write ∧ e₂.a.action == read ∧ (e₁.a.target == e₂.a.target)
+@[simp] def candadites (input : List Event) := input.product input |>.eraseDups
 
-#check rf
-
-instance (e₁ e₂ : Event) : Decidable (rf e₁ e₂) :=
-  show Decidable (e₁.a.action == write ∧ e₂.a.action == read ∧ (e₁.a.target == e₂.a.target)) from
-    inferInstanceAs (Decidable (_ ∧ _ ∧ _))
-
-#synth DecidableRel rf
-
--- Step 2: Data flow semantics
--- The read-from relation rf describes, for any given read, from which write this read could have taken its value.
--- This will give us many possible results for each read event (Wⁿ -> R).
-@[simp] def rf.set : Set (Event × Event) := {(a, b) | rf a b}
-
--- Set of all the writes.
-def W : Set (Event) := { x | x.a.action = write }
-
--- def rf (e : Event) : Set (Event × Event) := {(a, b) | b.id == e.id } ∩ rf.all_candidates
-
--- For each event, they may have one or more candidate
-
--- We can provide a db to this function so that the caller can fetch the value via index.
-def get_set {α : Type} (db : List (Set α)) (i : Fin db.length) : Set (Set α) := { db.get i }
-
-def db.mk {α : Type} : List (Set α) := []
-def db.add {α : Type} (db : List (Set α)) (elem : Set α) : List (Set α) := db ++ [elem]
-
-partial def groupBySndEq (xs : List (Event × Event)) : List (List (Event × Event)) :=
-  match xs with
-  | [] => []
-  | x :: xs' =>
-    let (equal, rest) := xs'.partition (·.snd == x.snd)
-    (x :: equal) :: groupBySndEq rest
-
-partial def groupByFstEq (xs : List (Event × Event)) : List (List (Event × Event)) :=
-  match xs with
-  | [] => []
-  | x :: xs' =>
-    let (equal, rest) := xs'.partition (·.fst == x.fst)
-    (x :: equal) :: groupBySndEq rest
-
--- coherence order is already been filtered by the same location, we just use the location of first elem in pair to group them.
-partial def groupByLoc (xs : List (Event × Event)) : List (List (Event × Event)) :=
-  match xs with
-  | [] => []
-  | x :: xs' =>
-    let (equal, rest) := xs'.partition (·.fst.a.target == x.fst.a.target)
-    (x :: equal) :: groupByLoc rest
-
--- coherence order is already been filtered by the same location, we just use the location of first elem in pair to group them.
-partial def groupByLocEvent (xs : List Event) : List (List Event) :=
-  match xs with
-  | [] => []
-  | x :: xs' =>
-    let (equal, rest) := xs'.partition (·.a.target == x.a.target)
-    (x :: equal) :: groupByLocEvent rest
-
-def List.permutation {α : Type} (lst : List α) : List (List α) :=
-  match lst with
-  | [] => [[]]
-  | x :: xs =>
-    let remains := List.permutation xs
-    remains.foldl (fun acc perm =>
-      acc ++ (List.range (perm.length + 1)).map (fun i =>
-        let (before, after) := perm.splitAt i
-        before ++ [x] ++ after
-      )
-    ) []
-
--- https://diy.inria.fr/doc/herd.html#sec%3Aprimitive
--- cartisan product.
-def cross {α : Type} : List (List α) → List (List α)
+@[simp] def cross {α : Type} : List (List α) → List (List α)
   | [] => [[]]
   | s1 :: s =>
     let ts := cross s
@@ -213,5 +216,144 @@ def relation_inverse {α : Type} (lst : List (α × α)) : List (α × α) :=
 --
 -- def partitiOnX {α : Type} (loc : String) (s : Set α) : Set (Set α) :=
 --   { set |  }
+
+@[simp] def co0.cal (input : List Event) :=
+  let candidates := candadites input
+  let loc := candidates.filter (λ p ↦ loc.rel p.1 p.2)
+  let IW := input.filter (λ p ↦ IW.rel p)
+  let FW := input.filter (λ p ↦ FW.rel p)
+  let W := input.filter (λ p ↦ W.rel p)
+  loc ∩ ((IW.product (W \ IW)) ∪ ((W \ FW).product FW))
+
+#synth DecidableRel (rf {})
+
+@[simp] def co0 (input : List Event) (a b : Event) : Prop :=
+  co0.cal input |>.contains (a, b)
+
+instance (input : List Event) : DecidableRel (co0 input) :=
+by
+  unfold co0
+  unfold co0.cal
+  simp
+  infer_instance
+
+-- Check if element a comes before b in the relation
+@[simp] def comes_before {α : Type} [DecidableEq α] (bound : List α) (rel : Rel α α) (a b : α) : Prop :=
+  ∀ x ∈ bound, ∀ y ∈ bound, rel x y -> a = x ∧ b = y
+
+instance {α : Type} [DecidableEq α] (bound : List α) (rel : Rel α α) [DecidableRel rel] (a b : α) :
+  Decidable (comes_before bound rel a b) :=
+  by
+    unfold comes_before
+    infer_instance
+
+-- Check if a list respects the relation (is a valid linearization)
+@[simp] def respects_relation {α : Type} [DecidableEq α] (rel : Rel α α) [DecidableRel rel] (lst : List α) : Bool :=
+  lst.zip lst.tail |>.all fun (a, b) =>
+    ¬(comes_before lst rel b a)
+
+instance {α : Type} [DecidableEq α] (bound : List α) (rel : Rel α α) [DecidableRel rel] :
+  Decidable (respects_relation rel bound) :=
+  by
+    unfold respects_relation
+    infer_instance
+
+-- Find all valid linearizations
+@[simp] def linearizations
+  {α : Type}
+  [DecidableEq α]
+  (elements : List α)
+  (rel : Rel α α)
+  [DecidableRel rel]
+  : List (List α) :=
+  (elements.permutations).filter (respects_relation rel)
+
+-- This function collects all the possible locations in the input program.
+@[simp] def get_all_locs (input : List Event) : List String :=
+  input.foldl (λ acc val ↦ val.a.target :: acc) [] |>.eraseDups
+
+-- Check if a list respects the relation (is a valid linearization)
+@[simp] def linearisations
+  {α : Type}
+  [DecidableEq α]
+  (elements : List α)
+  (rel : Rel α α)
+  [DecidableRel rel]
+  : List (List (α)) :=
+  (elements.permutations).filter (λ sort ↦ linear_strict_order rel sort)
+
+@[simp] def Wx (input : List Event) : List (List Event) :=
+  (get_all_locs input).map (λ loc ↦ input.filter (λ e ↦ is_write_same_loc loc e))
+
+-- allCox contains 1. List of all possible co candidates for each location.
+@[simp] def allCox (input : List Event) : List (List (List Event)) :=
+  (Wx input).map (fun ws ↦ linearizations ws (co0 input))
+
+-- We fetch one possible candidate for each location, then append them together as one candidate execution.
+@[simp] def allCo (input : List Event) : List (List (List Event)) := cross (allCox input)
+
+-- After flatten, we know each candidate is a list of events we want.
+@[simp] def co.Es (input : List Event) : List (List Event) := (cross (allCox input)).map (λ candidate ↦ candidate.flatten) |>.eraseDups
+
+-- Transform all the sorted events for a specific location to pairs in each candidate, and flatten the candidate.
+@[simp] def co'' (input : List Event) (a b : Event) : Prop :=
+  (allCo input).map (λ candidate ↦ (candidate.map (λ ws_x ↦ ws_x.zip ws_x.tail)).flatten)
+  |>.any (λ candidate ↦ candidate.contains (a, b))
+
+instance (input : List Event) : DecidableRel (co'' input) :=
+by
+  unfold co''
+  infer_instance
+
+-- def co (E : List Event) (a b : Event) : Prop
+--   := (allCo E).flatten.contains ()
+--
+-- lemma allCo_well_formed
+--   (input : List Event)
+--   : co_well_formed input [] (allCo input).flatten
+--
+@[simp] def rf_well_formed (E : List Event) (rf' : List Event -> Rel Event Event) : Prop :=
+  partial_order.strict (rf' E) E ∧
+  ∀ r ∈ E, r.a.action = read ->
+    (∃ w ∈ E, rf' E w r) ∧
+    (∀ w₁ ∈ E, ∀ w₂ ∈ E, rf' E w₁ r -> rf' E w₂ r -> w₁ = w₂)
+
+instance
+  (E : List Event)
+  (rf : List Event -> Rel Event Event)
+  [DecidableRel (rf E)] : Decidable (rf_well_formed E rf) :=
+by
+  unfold rf_well_formed
+  infer_instance
+
+@[simp] def is_read (e : Event) : Prop := e.a.action = read
+
+instance (e : Event) : Decidable (is_read e) :=
+  by
+    unfold is_read
+    infer_instance
+
+-- input : all the events.
+-- The corss is similiar to co, we have all the reads on (write x), then we pick one out and union with reads on other location write (e.g. y)
+@[simp] def rf.Es (input : List Event) : List (List Event) :=
+  let reads : List Event := (input.filter (is_read)).eraseDups
+  let rx : List (List Event) := reads.map (λ r ↦ input.filter (λ w ↦ rf input w r)) |>.eraseDups
+  -- This line is because we only have write events in the candidate, we need to add our reads (one read can read from different possible writes, but in one one candiate the read can only have exact one source to read).
+  (cross rx).map (λ ws ↦ reads ++ ws)
+
+@[simp] def validate
+  (input : List Event)
+  : Prop
+  :=
+    (rf.Es input).all (λ E ↦ rf_well_formed E rf) ∧
+    (co.Es input).all (λ E ↦ co_well_formed E (get_all_locs input) co'')
+
+instance (input : List Event) : Decidable (validate input) :=
+by
+  unfold validate
+  infer_instance
+
+-- def mkCandidateExcution (E : List Event) (rf : Rel Event Event) (co : Rel Event Event) (po : Rel Event Event) :=
+--   sorry
 
 end Primitives
