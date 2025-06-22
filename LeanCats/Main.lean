@@ -24,18 +24,12 @@ unsafe def eval_string (s : String) : Lean.Elab.TermElabM String := do
   let x <- Lean.Elab.Term.evalTerm String tp stx (safety := Lean.DefinitionSafety.unsafe)
   return x
 
-def prog :=
-  let a = amo | amo
-  acyclic a
-
-#reduce prog
-
 def prog₁ :=
   "let com = rf | fr | co
   acyclic po | com"
 
 set_option diagnostics true
-#eval (eval_string prog₁)
+-- #eval (eval_string prog₁)
 
 -- The good news is that the Lean4 is functional programming language, so everything is (alomost) immutable,
 -- We don't need to care if the variable is changed after passing it.
