@@ -6,8 +6,6 @@ open Lean.Meta Lean Lean.Expr Elab
 
 abbrev R := Rel Event Event
 
-def test : R := fun a b ↦ true
-
 -- Create fvar for keyword (Abstract interface)
 declare_syntax_cat keyword
 declare_syntax_cat dsl_term
@@ -139,6 +137,9 @@ def collectLetBindings (instructions : Array Syntax) : Array Name :=
     | _ => none).reverse
 
 section test
+
+def test : R := fun _ _ ↦ true
+
 def mkModelTest : Syntax -> MetaM Expr
   | `(model| $ins:inst* ) => do
     let rf' : Expr := .const ``test []
@@ -159,6 +160,7 @@ def mkModelTest : Syntax -> MetaM Expr
 
 elab ">>" p:model "<<" : term => mkModelTest p
 #reduce >> let a' = rf let b = rf acyclic rf let a = rf acyclic a' <<
+
 end test
 
 #check withLocalDeclsDND
@@ -180,5 +182,5 @@ def mkModel : Syntax -> MetaM Expr
   | _ =>
     throwUnsupportedSyntax
 
-elab ">>>" p:model "<<<" : term => mkModel p
-#reduce >>> let a' = rf let b = rf acyclic co let a = rf acyclic a' <<<
+elab p:model : term => mkModel p
+#reduce let a' = rf let b = rf acyclic co let a = rf acyclic a'
