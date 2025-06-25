@@ -12,7 +12,6 @@ abbrev E := List Event
 declare_syntax_cat keyword
 declare_syntax_cat dsl_term
 declare_syntax_cat expr
-declare_syntax_cat binOp
 declare_syntax_cat inst
 declare_syntax_cat comment
 declare_syntax_cat model
@@ -32,14 +31,13 @@ syntax ident : dsl_term
 syntax "(" expr ")" : dsl_term
 
 syntax dsl_term : expr
-syntax binOp : expr
 
-syntax dsl_term "|" expr: binOp
-syntax dsl_term "&" expr: binOp
-syntax dsl_term "*" expr: binOp
-syntax dsl_term "^" dsl_term: binOp
-syntax dsl_term "+" dsl_term: binOp
-syntax dsl_term "-" dsl_term: binOp
+syntax:50 expr:50 "|" expr:51 : expr
+syntax expr "&" expr : expr
+syntax:60 expr:60 "*" expr:61 : expr
+syntax expr "^" expr : expr
+syntax expr "+" expr : expr
+syntax expr "-" expr : expr
 
 syntax "let" ident "=" expr : inst
 syntax "acyclic" expr : inst
@@ -71,8 +69,8 @@ instance : Inter (Rel Event Event) where
 @[simp] def Rel.prod (lhs rhs : List Event -> Event -> Prop) (E : List Event) (e₁ e₂ : Event) : Prop :=
   lhs E e₁ ∧ rhs E e₂
 
-@[simp] def Rel.prod' (lhs rhs : Event -> Prop) (e₁ e₂ : Event) : Prop :=
-  lhs e₁ ∧ rhs e₂
+@[simp] def Rel.prod' (lhs rhs : Event -> Prop) : Rty :=
+  λ e₁ e₂ ↦ lhs e₁ ∧ rhs e₂
 
 @[simp] def Acyclic (r : Rel Event Event) : Prop
   := Irreflexive (Relation.TransGen r)
@@ -89,9 +87,9 @@ instance : Inter (Rel Event Event) where
   | `(keyword | co) => return co'
   | `(keyword | po) => return po'
   | `(keyword | W) => mkAppM `W' #[E]
-  | `(keyword | R) => mkAppM `Rty' #[E]
+  | `(keyword | R) => mkAppM `R' #[E]
   | `(keyword | M) => mkAppM `M' #[E]
-  | `(keyword | fr) => mkAppM `rf #[rf', co']
+  | `(keyword | fr) => mkAppM `fr' #[rf', co']
   | _ => throwUnsupportedSyntax
 
 @[reducible, simp] def I (x : Rty) : Rty := x
@@ -107,33 +105,27 @@ partial def mkTerm (E rf' co' po' : Expr) (ctx : Array Name) : Syntax -> MetaM L
       let ret := .app (.const ``I []) (.bvar idx)
       return ret
     | none => throwError s!"Unknown identifier: {lit.getId}"
+  | `(dsl_term | ( $e:expr )) => do
+    mkExpr E rf' co' po' ctx e
   | _ => do
     println! "Failed to parse term"
     throwUnsupportedSyntax
 
 partial def mkExpr (E rf' co' po' : Expr) (ctx : Array Name) : Syntax -> MetaM Lean.Expr
-  | `(expr| $e:binOp ) => do
-    mkBinOp E rf' co' po' ctx e
   | `(expr| $t:dsl_term ) => do
-    -- mkTerm rf' co' po' t
     mkTerm E rf' co' po' ctx t
-  | _ => do
-    println! "Failed to parse expr"
-    throwUnsupportedSyntax
-
-partial def mkBinOp (E rf' co' po' : Expr) (ctx : Array Name) : Syntax -> MetaM Lean.Expr
-  | `(binOp | $t:dsl_term | $e:expr) => do
-    let lhs <- mkTerm E rf' co' po' ctx t
-    let rhs <- mkExpr E rf' co' po' ctx e
-    mkAppM ``Union.union #[lhs, rhs]
-  | `(binOp | $t:dsl_term & $e:expr) => do
-    let lhs <- mkTerm E rf' co' po' ctx t
-    let rhs <- mkExpr E rf' co' po' ctx e
-    mkAppM ``Inter.inter #[lhs, rhs]
-  | `(binOp | $t:dsl_term * $e:expr) => do
-    let lhs <- mkTerm E rf' co' po' ctx t
-    let rhs <- mkExpr E rf' co' po' ctx e
+  | `(expr | $e₁:expr * $e₂:expr) => do
+    let lhs <- mkExpr E rf' co' po' ctx e₁
+    let rhs <- mkExpr E rf' co' po' ctx e₂
     mkAppM ``Rel.prod' #[lhs, rhs]
+  | `(expr | $e₁:expr | $e₂:expr)  => do
+    let lhs <- mkExpr E rf' co' po' ctx e₁
+    let rhs <- mkExpr E rf' co' po' ctx e₂
+    mkAppM ``Union.union #[lhs, rhs]
+  | `(expr | $e₁:expr & $e₂:expr) => do
+    let lhs <- mkExpr E rf' co' po' ctx e₁
+    let rhs <- mkExpr E rf' co' po' ctx e₂
+    mkAppM ``Inter.inter #[lhs, rhs]
   | _ => do
     println! "Failed to parse binOp"
     throwUnsupportedSyntax
@@ -195,7 +187,8 @@ def mkModelTest : Syntax -> MetaM Expr
     throwUnsupportedSyntax
 
 elab ">>" p:model "<<" : term => mkModelTest p
-#reduce >> include "" let a' = rf let b = rf acyclic rf let a = rf acyclic W * W <<
+
+#check >> include "" let a' = rf let b = rf acyclic rf let a = rf acyclic W * W <<
 
 end test
 
@@ -221,5 +214,8 @@ def mkModel : Syntax -> MetaM Expr
     throwUnsupportedSyntax
 
 elab p:model : term => mkModel p
+
+#check
+  let poo = (W*W | W*W)
 
 end CatParser
