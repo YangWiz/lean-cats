@@ -36,6 +36,7 @@ syntax binOp : expr
 
 syntax dsl_term "|" expr: binOp
 syntax dsl_term "&" expr: binOp
+syntax dsl_term "*" expr: binOp
 syntax dsl_term "^" dsl_term: binOp
 syntax dsl_term "+" dsl_term: binOp
 syntax dsl_term "-" dsl_term: binOp
@@ -49,51 +50,56 @@ syntax "include" str : inst
 
 syntax inst* : model
 
-
 instance : Union (Rel Event Event) where
   union (r₁ r₂ : Rel Event Event) := λ x y ↦ r₁ x y ∨ r₂ x y
 
 instance : Inter (Rel Event Event) where
   inter (r₁ r₂ : Rel Event Event) := λ x y ↦ r₁ x y ∧ r₂ x y
 
-def fr' (rf' : Rty) (co' : Rty) (e₁ e₂ : Event) : Prop :=
+@[simp] def fr' (rf' : Rty) (co' : Rty) (e₁ e₂ : Event) : Prop :=
   ∃w, w.a.action = write ∧ rf' w e₁ ∧ co' w e₂
 
-def R' (E : List Event) (e : Event) : Prop :=
+@[simp] def R' (E : List Event) (e : Event) : Prop :=
   e ∈ E ∧ e.a.action = read
 
-def W' (E : List Event) (e : Event) : Prop :=
+@[simp] def W' (E : List Event) (e : Event) : Prop :=
   e ∈ E ∧ e.a.action = write
 
-def M' (E : List Event) (e : Event) : Prop :=
+@[simp] def M' (E : List Event) (e : Event) : Prop :=
   R' E e ∨ W' E e
 
-def Rel.prod (lhs rhs : List Event -> Event -> Prop) (E : List Event) (e₁ e₂ : Event) : Prop :=
+@[simp] def Rel.prod (lhs rhs : List Event -> Event -> Prop) (E : List Event) (e₁ e₂ : Event) : Prop :=
   lhs E e₁ ∧ rhs E e₂
 
-def Acyclic (r : Rel Event Event) : Prop
+@[simp] def Rel.prod' (lhs rhs : Event -> Prop) (e₁ e₂ : Event) : Prop :=
+  lhs e₁ ∧ rhs e₂
+
+@[simp] def Acyclic (r : Rel Event Event) : Prop
   := Irreflexive (Relation.TransGen r)
 
-def mkAcyclicExpr (rel : Expr) : MetaM Expr := do
+@[simp] def mkAcyclicExpr (rel : Expr) : MetaM Expr := do
   mkAppM ``Acyclic #[rel]
 
-def mkIrreflexive (rel : Expr) : MetaM Expr := do
+@[simp] def mkIrreflexive (rel : Expr) : MetaM Expr := do
   mkAppM ``Irreflexive #[rel]
 
-def mkkeyword (rf' co' po' : Expr) : Syntax -> MetaM Expr
+@[simp] def mkkeyword (E rf' co' po' : Expr) : Syntax -> MetaM Expr
   | `(keyword | emptyset) => return const ``List []
   | `(keyword | rf) => return rf'
   | `(keyword | co) => return co'
   | `(keyword | po) => return po'
+  | `(keyword | W) => mkAppM `W' #[E]
+  | `(keyword | R) => mkAppM `Rty' #[E]
+  | `(keyword | M) => mkAppM `M' #[E]
   | `(keyword | fr) => mkAppM `rf #[rf', co']
   | _ => throwUnsupportedSyntax
 
 @[reducible, simp] def I (x : Rty) : Rty := x
 
 mutual
-partial def mkTerm (rf' co' po' : Expr) (ctx : Array Name) : Syntax -> MetaM Lean.Expr
+partial def mkTerm (E rf' co' po' : Expr) (ctx : Array Name) : Syntax -> MetaM Lean.Expr
   | `(dsl_term | $lit:keyword ) => do
-    mkkeyword rf' co' po' lit
+    mkkeyword E rf' co' po' lit
   | `(dsl_term | $lit:ident ) => do
     -- Look up the identifier in the context
     match ctx.findIdx? (· == lit.getId) with
@@ -105,25 +111,29 @@ partial def mkTerm (rf' co' po' : Expr) (ctx : Array Name) : Syntax -> MetaM Lea
     println! "Failed to parse term"
     throwUnsupportedSyntax
 
-partial def mkExpr (rf' co' po' : Expr) (ctx : Array Name) : Syntax -> MetaM Lean.Expr
+partial def mkExpr (E rf' co' po' : Expr) (ctx : Array Name) : Syntax -> MetaM Lean.Expr
   | `(expr| $e:binOp ) => do
-    mkBinOp rf' co' po' ctx e
+    mkBinOp E rf' co' po' ctx e
   | `(expr| $t:dsl_term ) => do
     -- mkTerm rf' co' po' t
-    mkTerm rf' co' po' ctx t
+    mkTerm E rf' co' po' ctx t
   | _ => do
     println! "Failed to parse expr"
     throwUnsupportedSyntax
 
-partial def mkBinOp (rf' co' po' : Expr) (ctx : Array Name) : Syntax -> MetaM Lean.Expr
+partial def mkBinOp (E rf' co' po' : Expr) (ctx : Array Name) : Syntax -> MetaM Lean.Expr
   | `(binOp | $t:dsl_term | $e:expr) => do
-    let lhs <- mkTerm rf' co' po' ctx t
-    let rhs <- mkExpr rf' co' po' ctx e
+    let lhs <- mkTerm E rf' co' po' ctx t
+    let rhs <- mkExpr E rf' co' po' ctx e
     mkAppM ``Union.union #[lhs, rhs]
   | `(binOp | $t:dsl_term & $e:expr) => do
-    let lhs <- mkTerm rf' co' po' ctx t
-    let rhs <- mkExpr rf' co' po' ctx e
+    let lhs <- mkTerm E rf' co' po' ctx t
+    let rhs <- mkExpr E rf' co' po' ctx e
     mkAppM ``Inter.inter #[lhs, rhs]
+  | `(binOp | $t:dsl_term * $e:expr) => do
+    let lhs <- mkTerm E rf' co' po' ctx t
+    let rhs <- mkExpr E rf' co' po' ctx e
+    mkAppM ``Rel.prod' #[lhs, rhs]
   | _ => do
     println! "Failed to parse binOp"
     throwUnsupportedSyntax
@@ -131,23 +141,23 @@ end
 
 -- We need to create a body using recursion (we need to process the left, then this one), so we need a foldr.
 -- We use a nameMap to store store the binding.
-def mkInstruction (rf' co' po' : Expr) (ctx : Array Name) (stx : Syntax) (restIns : Expr) : MetaM (Option Expr) :=
+def mkInstruction (E : Expr) (rf' co' po' : Expr) (ctx : Array Name) (stx : Syntax) (restIns : Expr) : MetaM (Option Expr) :=
   match stx with
   | `(inst | let $i:ident = $e:expr) => do
     logInfo restIns
-    let ret := letE i.getId (.const `R []) (<-mkExpr rf' co' po' ctx e) restIns true
+    let ret := letE i.getId (.const `Rty []) (<-mkExpr E rf' co' po' ctx e) restIns true
     logInfo ret
     return ret
   | `(inst | acyclic $e:expr) => do
-    let acyc <- mkAppM ``Acyclic #[<-mkExpr rf' co' po' ctx e]
+    let acyc <- mkAppM ``Acyclic #[<-mkExpr E rf' co' po' ctx e]
     mkAppM ``And #[acyc, restIns]
   | `(inst | irreflexive $e:expr) => do
-    let irfx <- mkAppM ``Irreflexive #[<-mkExpr rf' co' po' ctx e]
+    let irfx <- mkAppM ``Irreflexive #[<-mkExpr E rf' co' po' ctx e]
     mkAppM ``And #[irfx, restIns]
   | `(inst | (* $_:ident* *)) =>
     return none
-  -- | `(inst | include $_:str) =>
-  --   return none
+  | `(inst | include $_:str) =>
+    return none
   | _ => throwUnsupportedSyntax
 
 -- This is used to collect all the binders.
@@ -161,9 +171,11 @@ def collectLetBindings (instructions : Array Syntax) : Array Name :=
 section test
 
 def test : Rty := fun _ _ ↦ true
+def testE : E := []
 
 def mkModelTest : Syntax -> MetaM Expr
   | `(model| $ins:inst* ) => do
+    let E : Expr := .const ``testE []
     let rf' : Expr := .const ``test []
     let co' : Expr := .const ``test []
     let po' : Expr := .const ``test []
@@ -173,7 +185,7 @@ def mkModelTest : Syntax -> MetaM Expr
     let ctx := collectLetBindings ins.raw
 
     ins.foldrM (fun stx acc => do
-      let ins <- mkInstruction rf' co' po' ctx stx acc
+      let ins <- mkInstruction E rf' co' po' ctx stx acc
       match ins with
       | some i => return i
       | none => return acc
@@ -183,7 +195,7 @@ def mkModelTest : Syntax -> MetaM Expr
     throwUnsupportedSyntax
 
 elab ">>" p:model "<<" : term => mkModelTest p
--- #reduce >> """  " include "2123" let a' = rf let b = rf acyclic rf let a = rf acyclic a' <<
+#reduce >> include "" let a' = rf let b = rf acyclic rf let a = rf acyclic W * W <<
 
 end test
 
@@ -191,13 +203,13 @@ end test
 
 def mkModel : Syntax -> MetaM Expr
   | `(model| $ins:inst* ) => do
-    withLocalDeclsDND #[(`rf', (.const `R [])), (`co', (.const `R [])), (`po', (.const `R []))] ( λ params ↦ do
+    withLocalDeclsDND #[(`E', (.const `E [])), (`rf', (.const `Rty [])), (`co', (.const `Rty [])), (`po', (.const `Rty []))] ( λ params ↦ do
       -- Create the base case (likely True or unit)
       let baseExpr : Expr := .const ``True []
       let ctx := collectLetBindings ins.raw
 
       let body := ins.foldrM (fun stx acc => do
-        let ins <- mkInstruction params[0]! params[1]! params[2]! ctx stx acc
+        let ins <- mkInstruction params[0]! params[1]! params[2]! params[3]! ctx stx acc
         match ins with
         | some i => return i
         | none => return acc
