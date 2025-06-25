@@ -16,6 +16,6 @@ def parse (file : String) : Lean.MetaM Lean.Expr := do
 
 def t := parse "LeanCats/tso-00.cat"
 
-#eval parse "LeanCats/tso-00.cat"
+#check parse "LeanCats/tso-00.cat"
 
 #eval t
