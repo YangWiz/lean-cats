@@ -100,6 +100,7 @@ partial def mkTerm (E rf' co' po' : Expr) (ctx : Array Name) : Syntax -> MetaM L
     mkkeyword E rf' co' po' lit
   | `(dsl_term | $lit:ident ) => do
     -- Look up the identifier in the context
+    println! ctx
     match ctx.findIdx? (· == lit.getId) with
     | some idx =>
       let ret := .app (.const ``I []) (.bvar idx)
@@ -136,9 +137,7 @@ end
 def mkInstruction (E : Expr) (rf' co' po' : Expr) (ctx : Array Name) (stx : Syntax) (restIns : Expr) : MetaM (Option Expr) :=
   match stx with
   | `(inst | let $i:ident = $e:expr) => do
-    logInfo restIns
     let ret := letE i.getId (.const `Rty []) (<-mkExpr E rf' co' po' ctx e) restIns true
-    logInfo ret
     return ret
   | `(inst | acyclic $e:expr) => do
     let acyc <- mkAppM ``Acyclic #[<-mkExpr E rf' co' po' ctx e]
@@ -216,6 +215,14 @@ def mkModel : Syntax -> MetaM Expr
 elab p:model : term => mkModel p
 
 #check
-  let poo = (W*W | W*W)
+  include "cos.cat"
+
+  (* Communication relations that order events*)
+  let com = rf | co | fr
+  (* Program order that orders events *)
+  let c2 = po & (W*W | R*M)
+
+  let ghb = c2 | com
+  acyclic ghb
 
 end CatParser
