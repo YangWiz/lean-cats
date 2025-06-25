@@ -2,11 +2,13 @@ import Mathlib.Data.Rel
 import LeanCats.Data
 import Lean
 
+section CatParser
 open Lean.Meta Lean Lean.Expr Elab
 
-abbrev R := Rel Event Event
+abbrev Rty := Rel Event Event
 
--- Create fvar for keyword (Abstract interface)
+abbrev E := List Event
+
 declare_syntax_cat keyword
 declare_syntax_cat dsl_term
 declare_syntax_cat expr
@@ -19,9 +21,10 @@ syntax "co" : keyword
 syntax "rf" : keyword
 syntax "fr" : keyword
 syntax "po" : keyword
+syntax "W" : keyword
+syntax "R" : keyword
+syntax "M" : keyword
 syntax "emptyset" : keyword
-
-syntax "(*" ident* "*)" : comment
 
 syntax keyword : dsl_term
 syntax num : dsl_term
@@ -41,8 +44,11 @@ syntax "let" ident "=" expr : inst
 syntax "acyclic" expr : inst
 syntax "irreflexive" expr : inst
 syntax "empty" expr : inst
+syntax "(*" ident* "*)" : inst
+syntax "include" str : inst
 
 syntax inst* : model
+
 
 instance : Union (Rel Event Event) where
   union (r₁ r₂ : Rel Event Event) := λ x y ↦ r₁ x y ∨ r₂ x y
@@ -50,8 +56,20 @@ instance : Union (Rel Event Event) where
 instance : Inter (Rel Event Event) where
   inter (r₁ r₂ : Rel Event Event) := λ x y ↦ r₁ x y ∧ r₂ x y
 
-def fr' (rf' : R) (co' : R) (e₁ e₂ : Event) : Prop :=
+def fr' (rf' : Rty) (co' : Rty) (e₁ e₂ : Event) : Prop :=
   ∃w, w.a.action = write ∧ rf' w e₁ ∧ co' w e₂
+
+def R' (E : List Event) (e : Event) : Prop :=
+  e ∈ E ∧ e.a.action = read
+
+def W' (E : List Event) (e : Event) : Prop :=
+  e ∈ E ∧ e.a.action = write
+
+def M' (E : List Event) (e : Event) : Prop :=
+  R' E e ∨ W' E e
+
+def Rel.prod (lhs rhs : List Event -> Event -> Prop) (E : List Event) (e₁ e₂ : Event) : Prop :=
+  lhs E e₁ ∧ rhs E e₂
 
 def Acyclic (r : Rel Event Event) : Prop
   := Irreflexive (Relation.TransGen r)
@@ -70,10 +88,12 @@ def mkkeyword (rf' co' po' : Expr) : Syntax -> MetaM Expr
   | `(keyword | fr) => mkAppM `rf #[rf', co']
   | _ => throwUnsupportedSyntax
 
-@[reducible, simp] def I (x : R) : R := x
+@[reducible, simp] def I (x : Rty) : Rty := x
 
 mutual
 partial def mkTerm (rf' co' po' : Expr) (ctx : Array Name) : Syntax -> MetaM Lean.Expr
+  | `(dsl_term | $lit:keyword ) => do
+    mkkeyword rf' co' po' lit
   | `(dsl_term | $lit:ident ) => do
     -- Look up the identifier in the context
     match ctx.findIdx? (· == lit.getId) with
@@ -81,8 +101,6 @@ partial def mkTerm (rf' co' po' : Expr) (ctx : Array Name) : Syntax -> MetaM Lea
       let ret := .app (.const ``I []) (.bvar idx)
       return ret
     | none => throwError s!"Unknown identifier: {lit.getId}"
-  | `(dsl_term | $lit:keyword ) => do
-    mkkeyword rf' co' po' lit
   | _ => do
     println! "Failed to parse term"
     throwUnsupportedSyntax
@@ -113,7 +131,7 @@ end
 
 -- We need to create a body using recursion (we need to process the left, then this one), so we need a foldr.
 -- We use a nameMap to store store the binding.
-def mkInstruction (rf' co' po' : Expr) (ctx : Array Name) (stx : Syntax) (restIns : Expr) : MetaM Expr :=
+def mkInstruction (rf' co' po' : Expr) (ctx : Array Name) (stx : Syntax) (restIns : Expr) : MetaM (Option Expr) :=
   match stx with
   | `(inst | let $i:ident = $e:expr) => do
     logInfo restIns
@@ -126,6 +144,10 @@ def mkInstruction (rf' co' po' : Expr) (ctx : Array Name) (stx : Syntax) (restIn
   | `(inst | irreflexive $e:expr) => do
     let irfx <- mkAppM ``Irreflexive #[<-mkExpr rf' co' po' ctx e]
     mkAppM ``And #[irfx, restIns]
+  | `(inst | (* $_:ident* *)) =>
+    return none
+  -- | `(inst | include $_:str) =>
+  --   return none
   | _ => throwUnsupportedSyntax
 
 -- This is used to collect all the binders.
@@ -138,7 +160,7 @@ def collectLetBindings (instructions : Array Syntax) : Array Name :=
 
 section test
 
-def test : R := fun _ _ ↦ true
+def test : Rty := fun _ _ ↦ true
 
 def mkModelTest : Syntax -> MetaM Expr
   | `(model| $ins:inst* ) => do
@@ -151,15 +173,17 @@ def mkModelTest : Syntax -> MetaM Expr
     let ctx := collectLetBindings ins.raw
 
     ins.foldrM (fun stx acc => do
-      let ins := mkInstruction rf' co' po' ctx stx acc
-      ins
+      let ins <- mkInstruction rf' co' po' ctx stx acc
+      match ins with
+      | some i => return i
+      | none => return acc
     ) baseExpr
 
   | _ =>
     throwUnsupportedSyntax
 
 elab ">>" p:model "<<" : term => mkModelTest p
-#reduce >> let a' = rf let b = rf acyclic rf let a = rf acyclic a' <<
+-- #reduce >> """  " include "2123" let a' = rf let b = rf acyclic rf let a = rf acyclic a' <<
 
 end test
 
@@ -173,8 +197,10 @@ def mkModel : Syntax -> MetaM Expr
       let ctx := collectLetBindings ins.raw
 
       let body := ins.foldrM (fun stx acc => do
-        let ins := mkInstruction params[0]! params[1]! params[2]! ctx stx acc
-        ins
+        let ins <- mkInstruction params[0]! params[1]! params[2]! ctx stx acc
+        match ins with
+        | some i => return i
+        | none => return acc
       ) baseExpr
 
       mkLambdaFVars params (<-body)
@@ -183,4 +209,5 @@ def mkModel : Syntax -> MetaM Expr
     throwUnsupportedSyntax
 
 elab p:model : term => mkModel p
-#reduce let a' = rf let b = rf acyclic co let a = rf acyclic a'
+
+end CatParser
