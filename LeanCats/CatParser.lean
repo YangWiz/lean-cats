@@ -154,14 +154,14 @@ def mkInstruction (E : Expr) (rf' co' po' : Expr) (ctx : Array Name) (stx : Synt
 -- This is used to collect all the binders.
 -- We don't support variable shadowing.
 def collectLetBindings (instructions : Array Syntax) : Array Name :=
-  (instructions.filterMap fun stx =>
+  (instructions.filterMap λ stx ↦
     match stx with
     | `(inst | let $i:ident = $_:expr) => some i.getId
     | _ => none).reverse
 
 section test
 
-def test : Rty := fun _ _ ↦ true
+def test : Rty := λ _ _ ↦ true
 def testE : E := []
 
 def mkModelTest : Syntax -> MetaM Expr
@@ -175,7 +175,7 @@ def mkModelTest : Syntax -> MetaM Expr
     let baseExpr : Expr := .const ``True []
     let ctx := collectLetBindings ins.raw
 
-    ins.foldrM (fun stx acc => do
+    ins.foldrM (λ stx acc ↦ do
       let ins <- mkInstruction E rf' co' po' ctx stx acc
       match ins with
       | some i => return i
@@ -200,7 +200,7 @@ def mkModel : Syntax -> MetaM Expr
       let baseExpr : Expr := .const ``True []
       let ctx := collectLetBindings ins.raw
 
-      let body := ins.foldrM (fun stx acc => do
+      let body := ins.foldrM (λ stx acc ↦ do
         let ctx := match stx with
         | `(inst | let $_:ident = $_:expr) => ctx.drop 1
         | _ => ctx
