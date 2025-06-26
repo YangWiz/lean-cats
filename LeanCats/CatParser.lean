@@ -201,7 +201,12 @@ def mkModel : Syntax -> MetaM Expr
       let ctx := collectLetBindings ins.raw
 
       let body := ins.foldrM (fun stx acc => do
+        let ctx := match stx with
+        | `(inst | let $_:ident = $_:expr) => ctx.drop 1
+        | _ => ctx
+
         let ins <- mkInstruction params[0]! params[1]! params[2]! params[3]! ctx stx acc
+
         match ins with
         | some i => return i
         | none => return acc
@@ -220,9 +225,9 @@ elab p:model : term => mkModel p
   (* Communication relations that order events*)
   let com = rf | co | fr
   (* Program order that orders events *)
-  let c2 = po & (W*W | R*M)
+  let ppo = po & (W*W | R*M)
 
-  let ghb = c2 | com
+  let ghb = ppo | com
   acyclic ghb
 
 end CatParser
