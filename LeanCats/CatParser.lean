@@ -201,6 +201,7 @@ def mkModel : Syntax -> MetaM Expr
       let ctx := collectLetBindings ins.raw
 
       let body := ins.foldrM (λ stx acc ↦ do
+        -- Because it's foldr, the iteration works from right to left so we drop the closest binder when we meet one.
         let ctx := match stx with
         | `(inst | let $_:ident = $_:expr) => ctx.drop 1
         | _ => ctx
