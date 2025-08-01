@@ -222,7 +222,7 @@ elab "[cat|" p:model "]" : term => mkModel p
 -- parser hack
 def parseModel (file : String) : Lean.MetaM Lean.Expr := do
   let raw <- IO.FS.readFile file
-  let s := removeComments
+  let s := removeComments raw
   let env: Lean.Environment <- Lean.getEnv
   let stx?: Except String Lean.Syntax := Lean.Parser.runParserCategory env `model s
   let stx : Lean.Syntax <- Lean.ofExcept stx?
