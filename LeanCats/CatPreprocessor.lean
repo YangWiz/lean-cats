@@ -24,7 +24,7 @@ inductive InComment
 deriving Inhabited
 
 @[inline]
-private def process (accIncomment : String × InComment)  : Char → Char → String × InComment :=
+private def processBlock (accIncomment : String × InComment)  : Char → Char → String × InComment :=
   let ⟨acc, inComment⟩ := accIncomment
   fun c₁ c₂ => match c₁,c₂ with
   | '(', '*' => match inComment with
@@ -47,9 +47,24 @@ private def process (accIncomment : String × InComment)  : Char → Char → St
       | ')' => (acc, .outside)
       | _ => panic! s!"Error (leaving block) when removing comments at {acc}"
 
-def removeComments (input : String) : String :=
+def removeBlockComments (input : String) : String :=
   -- add a `\n` in the end that should be ignored by size-2 window
-  (input.push '\n').foldl2 process ({data := []}, .outside) |>.1
+  (input.push '\n').foldl2 processBlock ({data := []}, .outside) |>.1
+
+private def processHead (accDone : String × Bool)  : Char → String × Bool :=
+  let ⟨acc, done⟩ := accDone
+  fun c => if done then (acc.push c, true) else
+    match c with
+    | '"' => (acc, true)
+    | _ => (acc, false)
+
+
+def removeComments (input : String) : String :=
+  let headProcessed : String := match input.data with
+    | [] => .mk []
+    | '"'::rest => (String.mk rest).foldl processHead (String.mk [], false) |>.1
+    | s => .mk s
+  removeBlockComments headProcessed
 
 #eval removeComments "(**)"
 #eval removeComments "(*)"
@@ -60,3 +75,4 @@ def removeComments (input : String) : String :=
 #eval removeComments "(****)"
 #eval removeComments "*)(****)(**)*("
 #eval removeComments "this is a line \n(* \n a multi-line comment \n *)\n and then some "
+#eval removeComments "\"a header\" with a(*n inline*) comment"

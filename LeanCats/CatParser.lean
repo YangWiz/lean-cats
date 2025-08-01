@@ -1,5 +1,6 @@
 import Mathlib.Data.Rel
 import LeanCats.Data
+import LeanCats.CatPreprocessor
 import Lean
 
 section CatParser
@@ -191,8 +192,6 @@ elab ">>" p:model "<<" : term => mkModelTest p
 
 end test
 
-#check withLocalDeclsDND
-
 def mkModel : Syntax -> MetaM Expr
   | `(model| $ins:inst* ) => do
     withLocalDeclsDND #[(`E', (.const `E [])), (`rf', (.const `Rty [])), (`co', (.const `Rty [])), (`po', (.const `Rty []))] ( λ params ↦ do
@@ -218,9 +217,39 @@ def mkModel : Syntax -> MetaM Expr
   | _ =>
     throwUnsupportedSyntax
 
-elab p:model : term => mkModel p
+elab "[cat|" p:model "]" : term => mkModel p
 
-#check
+-- parser hack
+def parseModel (file : String) : Lean.MetaM Lean.Expr := do
+  let raw <- IO.FS.readFile file
+  let s := removeComments
+  let env: Lean.Environment <- Lean.getEnv
+  let stx?: Except String Lean.Syntax := Lean.Parser.runParserCategory env `model s
+  let stx : Lean.Syntax <- Lean.ofExcept stx?
+  mkModel stx
+
+elab "defcat" name:ident " := " "<" filename:str ">" : command => do
+  let modelExprCoreM : CoreM Expr := Lean.Meta.MetaM.run' <| parseModel filename.getString
+  let modelExpr : Expr ← Lean.Elab.Command.liftCoreM modelExprCoreM
+  let modelTypeCoreM : CoreM Expr := Lean.Meta.MetaM.run' <| inferType modelExpr
+  let modelType : Expr ← Lean.Elab.Command.liftCoreM modelTypeCoreM
+    let defnInfo : DefinitionVal := {
+    name := name.getId
+    value := modelExpr
+    levelParams := []
+    type := modelType
+    hints := ReducibilityHints.opaque
+    safety := DefinitionSafety.safe
+  }
+  -- Add the declaration to the environment
+  Lean.Elab.Command.liftCoreM <| addDecl (Declaration.defnDecl defnInfo)
+
+
+defcat tso := <"LeanCats/tso.cat">
+
+#check tso
+
+#check [cat|
   include "cos.cat"
 
   (* Communication relations that order events*)
@@ -230,5 +259,6 @@ elab p:model : term => mkModel p
 
   let ghb = ppo | com
   acyclic ghb
+  ]
 
 end CatParser
