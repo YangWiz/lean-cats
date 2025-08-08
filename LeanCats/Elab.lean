@@ -1,80 +1,14 @@
 import Mathlib.Data.Rel
 import LeanCats.Data
 import LeanCats.CatPreprocessor
+import LeanCats.Relations
+import LeanCats.Syntax
 import Lean
+
 
 section CatParser
 open Lean.Meta Lean Lean.Expr Elab
 
-abbrev Rty := Rel Event Event
-
-abbrev E := List Event
-
-declare_syntax_cat keyword
-declare_syntax_cat dsl_term
-declare_syntax_cat expr
-declare_syntax_cat inst
-declare_syntax_cat comment
-declare_syntax_cat model
-
-syntax "co" : keyword
-syntax "rf" : keyword
-syntax "fr" : keyword
-syntax "po" : keyword
-syntax "W" : keyword
-syntax "R" : keyword
-syntax "M" : keyword
-syntax "emptyset" : keyword
-
-syntax keyword : dsl_term
-syntax num : dsl_term
-syntax ident : dsl_term
-syntax "(" expr ")" : dsl_term
-
-syntax dsl_term : expr
-
-syntax:50 expr:50 "|" expr:51 : expr
-syntax expr "&" expr : expr
-syntax:60 expr:60 "*" expr:61 : expr
-syntax expr "^" expr : expr
-syntax expr "+" expr : expr
-syntax expr "-" expr : expr
-
-syntax "let" ident "=" expr : inst
-syntax "acyclic" expr : inst
-syntax "irreflexive" expr : inst
-syntax "empty" expr : inst
-syntax "(*" ident* "*)" : inst
-syntax "include" str : inst
-
-syntax inst* : model
-
-instance : Union (Rel Event Event) where
-  union (r₁ r₂ : Rel Event Event) := λ x y ↦ r₁ x y ∨ r₂ x y
-
-instance : Inter (Rel Event Event) where
-  inter (r₁ r₂ : Rel Event Event) := λ x y ↦ r₁ x y ∧ r₂ x y
-
-@[simp] def fr' (rf' : Rty) (co' : Rty) (e₁ e₂ : Event) : Prop :=
-  ∃w, w.a.action = write ∧ rf' w e₁ ∧ co' w e₂
-
-@[simp] def R' (E : List Event) (e : Event) : Prop :=
-  e ∈ E ∧ e.a.action = read
-
-@[simp] def W' (E : List Event) (e : Event) : Prop :=
-  e ∈ E ∧ e.a.action = write
-
-@[simp] def M' (E : List Event) (e : Event) : Prop :=
-  R' E e ∨ W' E e
-
-@[simp] def Rel.prod (lhs rhs : List Event -> Event -> Prop) (E : List Event) (e₁ e₂ : Event) : Prop :=
-  lhs E e₁ ∧ rhs E e₂
-
-@[simp] def Rel.prod' (lhs rhs : Event -> Prop) : Rty :=
-  λ e₁ e₂ ↦ lhs e₁ ∧ rhs e₂
-
-@[simp] def Acyclic (r : Rel Event Event) : Prop
-  := Irreflexive (Relation.TransGen r)
 
 @[simp] def mkAcyclicExpr (rel : Expr) : MetaM Expr := do
   mkAppM ``Acyclic #[rel]
@@ -128,6 +62,11 @@ partial def mkExpr (E rf' co' po' : Expr) (ctx : Array Name) : Syntax -> MetaM L
     let lhs <- mkExpr E rf' co' po' ctx e₁
     let rhs <- mkExpr E rf' co' po' ctx e₂
     mkAppM ``Inter.inter #[lhs, rhs]
+  | `(expr | $e₁:expr ; $e₂:expr) => do
+    let lhs <- mkExpr E rf' co' po' ctx e₁
+    let rhs <- mkExpr E rf' co' po' ctx e₂
+    mkAppM ``Sequence #[lhs, rhs]
+
   | _ => do
     println! "Failed to parse binOp"
     throwUnsupportedSyntax
@@ -228,26 +167,6 @@ def parseModel (file : String) : Lean.MetaM Lean.Expr := do
   let stx : Lean.Syntax <- Lean.ofExcept stx?
   mkModel stx
 
-elab "defcat" name:ident " := " "<" filename:str ">" : command => do
-  let modelExprCoreM : CoreM Expr := Lean.Meta.MetaM.run' <| parseModel filename.getString
-  let modelExpr : Expr ← Lean.Elab.Command.liftCoreM modelExprCoreM
-  let modelTypeCoreM : CoreM Expr := Lean.Meta.MetaM.run' <| inferType modelExpr
-  let modelType : Expr ← Lean.Elab.Command.liftCoreM modelTypeCoreM
-    let defnInfo : DefinitionVal := {
-    name := name.getId
-    value := modelExpr
-    levelParams := []
-    type := modelType
-    hints := ReducibilityHints.opaque
-    safety := DefinitionSafety.safe
-  }
-  -- Add the declaration to the environment
-  Lean.Elab.Command.liftCoreM <| addDecl (Declaration.defnDecl defnInfo)
-
-
-defcat tso := <"LeanCats/tso.cat">
-
-#check tso
 
 #check [cat|
   include "cos.cat"
