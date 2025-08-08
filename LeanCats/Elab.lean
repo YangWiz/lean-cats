@@ -8,6 +8,7 @@ import Lean
 
 section CatParser
 open Lean.Meta Lean Lean.Expr Elab
+open Event
 
 
 @[simp] def mkAcyclicExpr (rel : Expr) : MetaM Expr := do
@@ -21,10 +22,10 @@ open Lean.Meta Lean Lean.Expr Elab
   | `(keyword | rf) => return rf'
   | `(keyword | co) => return co'
   | `(keyword | po) => return po'
-  | `(keyword | W) => mkAppM `W' #[E]
-  | `(keyword | R) => mkAppM `R' #[E]
-  | `(keyword | M) => mkAppM `M' #[E]
-  | `(keyword | fr) => mkAppM `fr' #[rf', co']
+  | `(keyword | W) => mkAppM ``Event.W #[E]
+  | `(keyword | R) => mkAppM ``Event.R #[E]
+  | `(keyword | M) => mkAppM ``Event.M #[E]
+  | `(keyword | fr) => mkAppM ``Event.fr #[rf', co']
   | _ => throwUnsupportedSyntax
 
 @[reducible, simp] def I (x : Rty) : Rty := x
@@ -65,7 +66,7 @@ partial def mkExpr (E rf' co' po' : Expr) (ctx : Array Name) : Syntax -> MetaM L
   | `(expr | $e₁:expr ; $e₂:expr) => do
     let lhs <- mkExpr E rf' co' po' ctx e₁
     let rhs <- mkExpr E rf' co' po' ctx e₂
-    mkAppM ``Sequence #[lhs, rhs]
+    mkAppM ``sequence #[lhs, rhs]
 
   | _ => do
     println! "Failed to parse binOp"
