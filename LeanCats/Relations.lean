@@ -1,9 +1,5 @@
 import LeanCats.Data
 
-abbrev Rty := Rel Event Event
-
-abbrev E := List Event
-
 namespace Event
 
 def union (r₁ r₂ : Rel Event Event) := λ x y ↦ r₁ x y ∨ r₂ x y
@@ -15,7 +11,7 @@ instance : Union (Rel Event Event) := instUnionRelEvents
 instance : Inter (Rel Event Event) := ⟨inter⟩
 
 
-@[simp] def fr (rf : Rty) (co : Rty) (e₁ e₂ : Event) : Prop :=
+@[simp] def fr (rf co : Rel Event Event) (e₁ e₂ : Event) : Prop :=
   ∃w, w.a.action = write ∧ rf w e₁ ∧ co w e₂
 
 @[simp] def R (E : List Event) (e : Event) : Prop :=
@@ -30,7 +26,7 @@ instance : Inter (Rel Event Event) := ⟨inter⟩
 @[simp] def Rel.prod (lhs rhs : List Event -> Event -> Prop) (E : List Event) (e₁ e₂ : Event) : Prop :=
   lhs E e₁ ∧ rhs E e₂
 
-@[simp] def Rel.prod' (lhs rhs : Event -> Prop) : Rty :=
+@[simp] def Rel.prod' (lhs rhs : Event -> Prop) : Rel Event Event :=
   λ e₁ e₂ ↦ lhs e₁ ∧ rhs e₂
 
 @[simp] def Acyclic (r : Rel Event Event) : Prop

@@ -33,7 +33,7 @@ structure Event where
   (a : Action) -- Action performed
 deriving BEq, Repr, DecidableEq
 
-private structure CandidateExcution where
+structure CandidateExecution where
   (E : List Event)
   (po : Rel Event Event)
   (rf : Rel Event Event)
@@ -45,19 +45,44 @@ private structure CandidateExcution where
 -- rf : [(e₃, e₄), (e₄, e₅) ...]
 -- co : [(e₁, e₂) ...]
 
--- Then we store these values into candidate.
--- We will check if the users inputs are valid first.
-def mkExcution
+def Rel.empty : Rel Event Event := fun _ _ => False
+instance : EmptyCollection (Rel Event Event) := ⟨Rel.empty⟩
+
+namespace CandidateExecution
+
+def empty : CandidateExecution := { E := [], po := Rel.empty, rf := Rel.empty, co := Rel.empty}
+
+
+def Events (ce : CandidateExecution) : Type :=
+  @Set.Elem Event {e | e ∈ ce.E}
+
+def coeRel (ce : CandidateExecution) (r : Rel Event Event) :
+  Rel ce.Events ce.Events :=
+  fun x y => r x.val y.val
+
+instance {ce : CandidateExecution} :
+  Coe (Rel Event Event) (Rel ce.Events ce.Events) :=
+  ⟨coeRel ce⟩
+
+structure IsWellFormed (ce : CandidateExecution) where
+  poTotal : IsStrictTotalOrder ce.Events (ce.coeRel ce.po)
+  -- what else?
+
+def mkExecution
   (E : List Event)
   (po : List (Event × Event))
   (rf : List (Event × Event))
   (co : List (Event × Event))
-  : Option CandidateExcution :=
+  : Option CandidateExecution :=
   if po.Nodup ∧ rf.Nodup ∧ co.Nodup
   then
     let po_rel := λ a b ↦ (a, b) ∈ po
     let rf_rel := λ a b ↦ (a, b) ∈ rf
     let co_rel := λ a b ↦ (a, b) ∈ co
-    CandidateExcution.mk E po_rel rf_rel co_rel
+    CandidateExecution.mk E po_rel rf_rel co_rel
   else
     none
+
+-- We later prove that this constructor makes well-formed CEs
+-- This is not the case right now.
+end CandidateExecution
