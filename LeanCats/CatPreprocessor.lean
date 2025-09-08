@@ -76,3 +76,16 @@ def removeComments (input : String) : String :=
 #eval removeComments "*)(****)(**)*("
 #eval removeComments "this is a line \n(* \n a multi-line comment \n *)\n and then some "
 #eval removeComments "\"a header\" with a(*n inline*) comment"
+
+def Filename.mkName (inp : String) : Lean.Name := Id.run do
+  let mut nm : List Char := []
+  for c in inp.data do
+    if c.isAlpha then
+      nm := c :: nm
+    else if c == '.' then
+      return (.str  .anonymous {data := nm.reverse})
+    else
+      continue
+  return (.str  .anonymous {data := nm.reverse})
+
+#eval Filename.mkName "foo_bar3.baz"

@@ -6,6 +6,7 @@ declare_syntax_cat expr
 declare_syntax_cat inst
 declare_syntax_cat comment
 declare_syntax_cat model
+declare_syntax_cat assertion
 
 syntax "co" : keyword
 syntax "rf" : keyword
@@ -31,10 +32,13 @@ syntax expr "^" expr : expr
 syntax expr "+" expr : expr
 syntax expr "-" expr : expr
 
+syntax "acyclic" : assertion
+syntax "irreflexive" : assertion
+syntax "empty" : assertion
+
+syntax assertion expr ("as" ident)? : inst
 syntax "let" ident "=" expr : inst
-syntax "acyclic" expr : inst
-syntax "irreflexive" expr : inst
-syntax "empty" expr : inst
+
 syntax "(*" ident* "*)" : inst
 syntax "include" str : inst
 
