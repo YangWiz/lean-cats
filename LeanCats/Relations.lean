@@ -10,15 +10,14 @@ instance instUnionRelEvents : Union (Event → Event → Prop) := ⟨union⟩
 instance : Union (Rel Event Event) := instUnionRelEvents
 instance : Inter (Rel Event Event) := ⟨inter⟩
 
-
 @[simp] def fr (rf co : Rel Event Event) (e₁ e₂ : Event) : Prop :=
-  ∃w, w.a.action = write ∧ rf w e₁ ∧ co w e₂
+  ∃w, w.act.op = Op.write ∧ rf w e₁ ∧ co w e₂
 
 @[simp] def R (E : List Event) (e : Event) : Prop :=
-  e ∈ E ∧ e.a.action = read
+  e ∈ E ∧ e.act.op = Op.read
 
 @[simp] def W (E : List Event) (e : Event) : Prop :=
-  e ∈ E ∧ e.a.action = write
+  e ∈ E ∧ e.act.op = Op.write
 
 @[simp] def M (E : List Event) (e : Event) : Prop :=
   R E e ∨ W E e
