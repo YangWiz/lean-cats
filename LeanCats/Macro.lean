@@ -2,23 +2,26 @@ import LeanCats.Syntax
 import LeanCats.Relations
 import LeanCats.Data
 
-namespace Cats
+namespace CatSemantics
+open CatGrammar
 
-syntax "[expr|" expr "]" : term
-syntax "[keyword|" keyword "]" : term
-syntax "[inst|" inst "]" : command
-syntax "[model|" command* "]" : model
-syntax "[assertion|" assertion "]" : term
-syntax "[annotable-events|" annotable_events "]" : term -- Set
-syntax "[predefined-events|" predefined_events "]" : term
+scoped syntax "[expr|" expr "]" : term
+scoped syntax "[keyword|" keyword "]" : term
+scoped syntax "[inst|" inst "]" : command
+scoped syntax "[model|" command* "]" : model
+scoped syntax "[assertion|" assertion "]" : term
+scoped syntax "[annotable-events|" annotable_events "]" : term -- Set
+scoped syntax "[predefined-events|" predefined_events "]" : term
 
-macro_rules
+scoped syntax "[predefined-relations]" predefined_relations "]" : term
+
+scoped macro_rules
   | `([expr| $e₁:expr | $e₂:expr]) => `(Event.union [expr| $e₁] [expr| $e₂])
   | `([expr| $e₁:expr & $e₂:expr]) => `(Event.inter [expr| $e₁] [expr| $e₂])
   | `([expr| $e₁:expr ; $e₂:expr]) => `(Event.sequence [expr| $e₁] [expr| $e₂])
   | `([expr| $k:keyword ]) => `([keyword| $k])
 
-macro_rules
+scoped macro_rules
   | `([keyword| and]) => Lean.Macro.throwUnsupported
   | `([keyword| as]) => Lean.Macro.throwUnsupported
   | `([keyword| begin]) => Lean.Macro.throwUnsupported
@@ -40,41 +43,45 @@ macro_rules
   | `([keyword| with]) => Lean.Macro.throwUnsupported
   | `([keyword| $a:assertion]) => `([assertion| $a])
 
-macro_rules
+scoped macro_rules
   | `([assertion| irreflexive]) => `(Irreflexive)
   | `([assertion| acyclic]) => `(Acyclic)
   | `([assertion| empty]) => `(IsEmpty)
 
--- macro_rules
---   | `([annotable-events| W]) => _
+scoped macro_rules
+  | `([annotable-events| W]) => `(λ E: CandidateExecution ↦ E.evts.W)
+  | `([annotable-events| R]) => `(λ E: CandidateExecution ↦ E.evts.R)
+  | `([annotable-events| B]) => `(λ E: CandidateExecution ↦ E.evts.B)
+  | `([annotable-events| F]) => `(λ E: CandidateExecution ↦ E.evts.F)
+  -- | `([annotable-events| W]) => `(λ E: CandidateExecution ↦ E.evts)
 
-macro_rules
+scoped macro_rules
+  -- | `([predefined-events| ___]) => __ TODO!(figure all the definiations of all the events. (⋃?))
+  | `([predefined-events| IW]) => `(λ E: CandidateExecution ↦ E.evts.IW)
+  | `([predefined-events| M]) => `(λ E: CandidateExecution ↦ E.evts.W ∪ E.evts.R)
+  | `([predefined-events| $a:annotable_events]) => `([annotable-events| $a])
+
+scoped macro_rules
   | `([inst| let $nm = $e]) => `(def $nm := [expr|$e])
   | `([inst| $a:assertion $e as $nm]) => `(def $nm : Prop := [assertion| $a] [expr| $e])
   -- | `([inst| (* $_ *)]) => `(#print "")
 
 -- The value of expr 2 must be a set of values S and the operator returns the set S augmented with the value of expr 1.
 -- The cat specification didn't give us the precedence, so we use the Ocaml as the reference.
-infixl:61 " ++ " => Set.insert
+scoped infixl:61 " ++ " => Set.insert
+scoped infixl:61 " * " => Set.prod
+scoped infixl:61 " | " => Set.union
+scoped infixl:61 " & " => Set.inter
+scoped infixl:61 " ; " => Rel.comp
+scoped postfix:61 "*" => Relation.ReflTransGen
+scoped postfix:61 "+" => Relation.TransGen
+scoped postfix:61 "^-1" => Rel.inv
 
--- Cartesian product.
-infixl:61 " * " => Set.prod
-
-infixl:61 " | " => Set.union
-
-infixl:61 " & " => Set.inter
-
-infixl:61 " ; " => Rel.comp
-
-postfix:61 "*" => Relation.ReflTransGen
-
-postfix:61 "+" => Relation.TransGen
-
-postfix:61 "^-1" => Rel.inv
-
-end Cats
+-- postfix:61 "?" => Relation: Identity closure.
 
 -- theorem test123 :
 --   ∀E : CandidateExecution, IsEmpty E.evts.B :=
 --   by
 --     intro E
+
+end CatSemantics
