@@ -37,11 +37,15 @@ scoped macro_rules
 
 scoped macro_rules
   | `([reserved| $r:predefined_relations]) => `([predefined-relations| $r])
+  | `([reserved| $e:predefined_events]) => `([predefined-events| $e])
 
 scoped macro_rules
   | `([predefined-relations| co]) => `(X.co)
   | `([predefined-relations| po]) => `(X.po)
   | `([predefined-relations| rf]) => `(X.rf)
+
+scoped macro_rules
+  | `([predefined-events| W]) => `(X.evts.W)
 
 scoped macro_rules
   | `([keyword| and]) => Lean.Macro.throwUnsupported
@@ -113,9 +117,10 @@ def test₁ : Rel Event Event := X.co
 
 [inst| let fr = rf^-1 ; co]
 [inst| let com = rf | co | fr]
--- [inst| let poo = W*W]
+[inst| let poo = W*W]
 [inst| let ghb = po | com]
--- [assertion| acyclic ghb]
+
+#check ghb
 
 #check fr
 
