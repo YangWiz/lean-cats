@@ -1,88 +1,115 @@
 import Mathlib.Data.Rel
 
+namespace Data
+
 inductive Thread : Type where
   | mk: Nat -> Thread
-deriving BEq, Repr, DecidableEq
+deriving Inhabited, BEq, Repr, DecidableEq
 
-abbrev write := "write"
-abbrev read := "read"
+inductive Op : Type where
+  | write : Op
+  | read : Op
+  | fence : Op
+  | branch : Op
+deriving Inhabited, BEq, Repr, DecidableEq
 
-/-
-Actions are of several kinds, which we detail in the course of this article. For now, we
-only consider read and write events relative to memory locations. For example, for the
-location x, we can have a read of the value 0 noted Rx = 0, or a write of the value 1,
-noted Wx = 1. We write proc(e) for the thread holding the event e and addr(e) for its
-address, or memory location.
--/
 structure Action : Type where
-  action : String
+  op: Op
   target : String
   -- For read, the value can not be determined at the begining.
   value : Option Nat
   isFirstWrite : Bool
   isFinalWrite : Bool
-deriving BEq, Repr, DecidableEq
+deriving Inhabited, BEq, Repr, DecidableEq
 
-/-
--/
 structure Event where
   (id : String)   -- Unique identifier
   (t_id : Nat)      -- Thread ID
   (t : Thread)    -- Associated thread
   (ln : Nat)        -- Line number or position
-  (a : Action) -- Action performed
-deriving BEq, Repr, DecidableEq
+  (act : Action) -- Action performed
+deriving Inhabited, BEq, Repr, DecidableEq
 
+-- Cat Language Types:
+-- evt (event),
+-- tag (tag),
+-- rel (relation between events),
+-- set (set),
+-- tuple (tuple),
+-- enum (enumeration of tags),
+-- fun (unary function type),
+-- proc (unary procedure type).
+abbrev evt := Event
+
+inductive error
+
+inductive Judgement
+  | Allowed : Judgement
+  | Forbidden: Judgement
+
+-- Events can be (for brevity this is not an exhaustive list):
+-- writes, gathered in the set W, including the the set IW of initial writes coming from the prelude of the program;
+-- reads, gathered in the set R;
+-- branch events, gathered in the set B;
+-- fences, gathered in the set F.
+structure Events where
+  (W : Set Event)
+  (IW : Set Event)
+  (R : Set Event)
+  (B : Set Event)
+  (F : Set Event)
+  (RMW : Set Event)
+
+def Events.empty : Events :=
+  {
+    W := {}
+    IW := {}
+    R := {}
+    B := {}
+    F := {}
+    RMW := {}
+  }
+
+instance Events.Inhabited : Inhabited Events :=
+  { default := Events.empty }
+
+/-- Each execution is abstracted to a candidate execution 〈evts , po, rf, co, IW, sr〉 providing
+This definination is different with the formal semantics, because the `co` is defined in [stdlib.cat](https://github.com/herd/herdtools7/blob/2a7599f8ecdbde0ed67925daf6534c1a0c26d535/herd-www/cat_includes/stdlib.cat) and
+by computation, so should declare it as the base relation. -/
 structure CandidateExecution where
-  (E : List Event)
+  (evts : Events)
   (po : Rel Event Event)
   (rf : Rel Event Event)
   (co : Rel Event Event)
+  (IW : Set Event)
+  (sr : Rel Event Event)
+deriving Inhabited
 
--- User provided data
--- E: List of events [e₁, e₂ ... ]
--- po : [(e₁, e₂), (e₂, e₃) ...]
--- rf : [(e₃, e₄), (e₄, e₅) ...]
--- co : [(e₁, e₂) ...]
+def evts (es : Events) : Set Event :=
+  es.B ∪ es.F ∪ es.IW ∪ es.R ∪ es.RMW ∪ es.W
 
 def Rel.empty : Rel Event Event := fun _ _ => False
 instance : EmptyCollection (Rel Event Event) := ⟨Rel.empty⟩
 
-namespace CandidateExecution
+def empty [Inhabited Events] : CandidateExecution :=
+  { evts := default , po := Rel.empty, co := Rel.empty, rf := Rel.empty, sr := Rel.empty, IW := {} }
 
-def empty : CandidateExecution := { E := [], po := Rel.empty, rf := Rel.empty, co := Rel.empty}
-
-
-def Events (ce : CandidateExecution) : Type :=
-  @Set.Elem Event {e | e ∈ ce.E}
-
-def coeRel (ce : CandidateExecution) (r : Rel Event Event) :
-  Rel ce.Events ce.Events :=
-  fun x y => r x.val y.val
-
-instance {ce : CandidateExecution} :
-  Coe (Rel Event Event) (Rel ce.Events ce.Events) :=
-  ⟨coeRel ce⟩
-
-structure IsWellFormed (ce : CandidateExecution) where
-  poTotal : IsStrictTotalOrder ce.Events (ce.coeRel ce.po)
-  -- what else?
-
-def mkExecution
-  (E : List Event)
-  (po : List (Event × Event))
-  (rf : List (Event × Event))
-  (co : List (Event × Event))
-  : Option CandidateExecution :=
-  if po.Nodup ∧ rf.Nodup ∧ co.Nodup
-  then
-    let po_rel := λ a b ↦ (a, b) ∈ po
-    let rf_rel := λ a b ↦ (a, b) ∈ rf
-    let co_rel := λ a b ↦ (a, b) ∈ co
-    CandidateExecution.mk E po_rel rf_rel co_rel
-  else
-    none
+-- def Events (ce : CandidateExecution) : Type :=
+--   @Set.Elem Event {e | e ∈ ce.E}
+--
+-- def coeRel (ce : CandidateExecution) (r : Rel Event Event) :
+--   Rel ce.Events ce.Events :=
+--   fun x y => r x.val y.val
+--
+-- instance {ce : CandidateExecution} :
+--   Coe (Rel Event Event) (Rel ce.Events ce.Events) :=
+--   ⟨coeRel ce⟩
+--
+-- structure IsWellFormed (ce : CandidateExecution) where
+--   poTotal : IsStrictTotalOrder ce.Events (ce.coeRel ce.po)
+--   -- what else?
 
 -- We later prove that this constructor makes well-formed CEs
 -- This is not the case right now.
-end CandidateExecution
+
+end Data
