@@ -119,23 +119,4 @@ def test₁ : Rel Event Event := X.co
 
 #check fr
 
-theorem test : ∀x : CandidateExecution, CatRel.Acyclic (fr x) :=
-  by
-    simp
-    intro x
-    unfold fr
-    unfold Rel.comp
-
--- postfix:61 "?" => Relation: Identity closure.
-
--- theorem test123 :
---   ∀E : CandidateExecution, (model1 E) ⊆ (model2 E) :=
---   by
---     intro E
-
-syntax bigO := "O"
-
--- Big section
-
-
 end CatSemantics
