@@ -1,15 +1,17 @@
 import Mathlib.Data.Rel
 
+namespace Data
+
 inductive Thread : Type where
   | mk: Nat -> Thread
-deriving BEq, Repr, DecidableEq
+deriving Inhabited, BEq, Repr, DecidableEq
 
 inductive Op : Type where
   | write : Op
   | read : Op
   | fence : Op
   | branch : Op
-deriving BEq, Repr, DecidableEq
+deriving Inhabited, BEq, Repr, DecidableEq
 
 structure Action : Type where
   op: Op
@@ -18,17 +20,32 @@ structure Action : Type where
   value : Option Nat
   isFirstWrite : Bool
   isFinalWrite : Bool
-deriving BEq, Repr, DecidableEq
+deriving Inhabited, BEq, Repr, DecidableEq
 
-/-
--/
 structure Event where
   (id : String)   -- Unique identifier
   (t_id : Nat)      -- Thread ID
   (t : Thread)    -- Associated thread
   (ln : Nat)        -- Line number or position
-  (a : Action) -- Action performed
-deriving BEq, Repr, DecidableEq
+  (act : Action) -- Action performed
+deriving Inhabited, BEq, Repr, DecidableEq
+
+-- Cat Language Types:
+-- evt (event),
+-- tag (tag),
+-- rel (relation between events),
+-- set (set),
+-- tuple (tuple),
+-- enum (enumeration of tags),
+-- fun (unary function type),
+-- proc (unary procedure type).
+abbrev evt := Event
+
+inductive error
+
+inductive Judgement
+  | Allowed : Judgement
+  | Forbidden: Judgement
 
 -- Events can be (for brevity this is not an exhaustive list):
 -- writes, gathered in the set W, including the the set IW of initial writes coming from the prelude of the program;
@@ -41,6 +58,7 @@ structure Events where
   (R : Set Event)
   (B : Set Event)
   (F : Set Event)
+  (RMW : Set Event)
 
 def Events.empty : Events :=
   {
@@ -49,26 +67,32 @@ def Events.empty : Events :=
     R := {}
     B := {}
     F := {}
+    RMW := {}
   }
 
-def Events.Inhabited : Inhabited Events :=
+instance Events.Inhabited : Inhabited Events :=
   { default := Events.empty }
 
--- Each execution is abstracted to a candidate execution 〈evts , po, rf, IW, sr〉 providing
+/-- Each execution is abstracted to a candidate execution 〈evts , po, rf, co, IW, sr〉 providing
+This definination is different with the formal semantics, because the `co` is defined in [stdlib.cat](https://github.com/herd/herdtools7/blob/2a7599f8ecdbde0ed67925daf6534c1a0c26d535/herd-www/cat_includes/stdlib.cat) and
+by computation, so should declare it as the base relation. -/
 structure CandidateExecution where
   (evts : Events)
   (po : Rel Event Event)
   (rf : Rel Event Event)
+  (co : Rel Event Event)
   (IW : Set Event)
   (sr : Rel Event Event)
+deriving Inhabited
+
+def evts (es : Events) : Set Event :=
+  es.B ∪ es.F ∪ es.IW ∪ es.R ∪ es.RMW ∪ es.W
 
 def Rel.empty : Rel Event Event := fun _ _ => False
 instance : EmptyCollection (Rel Event Event) := ⟨Rel.empty⟩
 
-namespace CandidateExecution
-
 def empty [Inhabited Events] : CandidateExecution :=
-  { evts := default , po := Rel.empty, rf := Rel.empty, sr := Rel.empty, IW := {} }
+  { evts := default , po := Rel.empty, co := Rel.empty, rf := Rel.empty, sr := Rel.empty, IW := {} }
 
 -- def Events (ce : CandidateExecution) : Type :=
 --   @Set.Elem Event {e | e ∈ ce.E}
@@ -87,4 +111,5 @@ def empty [Inhabited Events] : CandidateExecution :=
 
 -- We later prove that this constructor makes well-formed CEs
 -- This is not the case right now.
-end CandidateExecution
+
+end Data

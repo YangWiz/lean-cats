@@ -4,22 +4,44 @@ import LeanCats.Data
 
 namespace CatSemantics
 open CatGrammar
+open Data
+
+variable (X : CandidateExecution)
+
+variable (fr_var : Rel Event Event)
+variable (co_var : Rel Event Event)
 
 scoped syntax "[expr|" expr "]" : term
 scoped syntax "[keyword|" keyword "]" : term
-scoped syntax "[inst|" inst "]" : command
-scoped syntax "[model|" command* "]" : model
 scoped syntax "[assertion|" assertion "]" : term
+
+scoped syntax "[inst|" inst "]" : command
+scoped syntax "[model|inst" name command* "]" : model
 scoped syntax "[annotable-events|" annotable_events "]" : term -- Set
 scoped syntax "[predefined-events|" predefined_events "]" : term
-
-scoped syntax "[predefined-relations]" predefined_relations "]" : term
+scoped syntax "[reserved|" reserved "]" : term
+scoped syntax "[predefined-relations|" predefined_relations "]" : term
+scoped syntax "[dsl-term|" dsl_term "]" : term
 
 scoped macro_rules
-  | `([expr| $e₁:expr | $e₂:expr]) => `(Event.union [expr| $e₁] [expr| $e₂])
-  | `([expr| $e₁:expr & $e₂:expr]) => `(Event.inter [expr| $e₁] [expr| $e₂])
-  | `([expr| $e₁:expr ; $e₂:expr]) => `(Event.sequence [expr| $e₁] [expr| $e₂])
-  | `([expr| $k:keyword ]) => `([keyword| $k])
+  | `([expr| $e₁:expr | $e₂:expr]) => `(CatRel.union [expr| $e₁] [expr| $e₂])
+  | `([expr| $e₁:expr & $e₂:expr]) => `(CatRel.inter [expr| $e₁] [expr| $e₂])
+  | `([expr| $e₁:expr ; $e₂:expr]) => `(Rel.comp [expr| $e₁] [expr| $e₂])
+  | `([expr| $e₁:expr * $e₂:expr]) => `(Set.prod [expr| $e₁] [expr| $e₂])
+  | `([expr| $e^-1]) => `(Rel.inv [expr| $e])
+  | `([expr| $r:reserved]) => `([reserved| $r])
+  | `([expr| $t:dsl_term]) => `([dsl-term| $t]) -- environemnt identifiers ρ, introduced by commands.
+
+scoped macro_rules
+  | `([dsl-term| $i:ident]) => `($i X) -- Apply the variable X to identifier, otherwise the type signature will has a extra type (CandidateExecution).
+
+scoped macro_rules
+  | `([reserved| $r:predefined_relations]) => `([predefined-relations| $r])
+
+scoped macro_rules
+  | `([predefined-relations| co]) => `(X.co)
+  | `([predefined-relations| po]) => `(X.po)
+  | `([predefined-relations| rf]) => `(X.rf)
 
 scoped macro_rules
   | `([keyword| and]) => Lean.Macro.throwUnsupported
@@ -49,10 +71,10 @@ scoped macro_rules
   | `([assertion| empty]) => `(IsEmpty)
 
 scoped macro_rules
-  | `([annotable-events| W]) => `(λ E: CandidateExecution ↦ E.evts.W)
-  | `([annotable-events| R]) => `(λ E: CandidateExecution ↦ E.evts.R)
-  | `([annotable-events| B]) => `(λ E: CandidateExecution ↦ E.evts.B)
-  | `([annotable-events| F]) => `(λ E: CandidateExecution ↦ E.evts.F)
+  | `([annotable-events| W]) => `(X.evts.W)
+  | `([annotable-events| R]) => `(X.evts.R)
+  | `([annotable-events| B]) => `(X.evts.B)
+  | `([annotable-events| F]) => `(X.evts.F)
   -- | `([annotable-events| W]) => `(λ E: CandidateExecution ↦ E.evts)
 
 scoped macro_rules
@@ -69,19 +91,51 @@ scoped macro_rules
 -- The value of expr 2 must be a set of values S and the operator returns the set S augmented with the value of expr 1.
 -- The cat specification didn't give us the precedence, so we use the Ocaml as the reference.
 scoped infixl:61 " ++ " => Set.insert
+
 scoped infixl:61 " * " => Set.prod
+
 scoped infixl:61 " | " => Set.union
+
 scoped infixl:61 " & " => Set.inter
+
 scoped infixl:61 " ; " => Rel.comp
+
 scoped postfix:61 "*" => Relation.ReflTransGen
+
+-- The macro is bidirective (from left to right and from right to left).
 scoped postfix:61 "+" => Relation.TransGen
-scoped postfix:61 "^-1" => Rel.inv
+
+def test₁ : Rel Event Event := X.co
+
+#check test₁
+
+#check (test₁ X)
+
+[inst| let fr = rf^-1 ; co]
+[inst| let com = rf | co | fr]
+-- [inst| let poo = W*W]
+[inst| let ghb = po | com]
+-- [assertion| acyclic ghb]
+
+#check fr
+
+theorem test : ∀x : CandidateExecution, CatRel.Acyclic (fr x) :=
+  by
+    simp
+    intro x
+    unfold fr
+    unfold Rel.comp
 
 -- postfix:61 "?" => Relation: Identity closure.
 
 -- theorem test123 :
---   ∀E : CandidateExecution, IsEmpty E.evts.B :=
+--   ∀E : CandidateExecution, (model1 E) ⊆ (model2 E) :=
 --   by
 --     intro E
+
+syntax bigO := "O"
+
+-- Big section
+
 
 end CatSemantics

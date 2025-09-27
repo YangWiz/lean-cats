@@ -1,4 +1,4 @@
-namespace Cat
+namespace CatGrammar
 
 declare_syntax_cat dsl_term
 declare_syntax_cat expr
@@ -6,29 +6,23 @@ declare_syntax_cat inst
 declare_syntax_cat comment
 declare_syntax_cat model
 declare_syntax_cat assertion
-
--- Indentifier definitions
--- Reserved ≜ keywords ∪ primitives ∪ names
--- Reference: Syntax and Semantics of the cat Language, Version 1.1 | page 14
 declare_syntax_cat reserved
 declare_syntax_cat keyword
 declare_syntax_cat primitive
 declare_syntax_cat name
-
--- statement ∈ Statement
--- statement ::= definition | constraint
 declare_syntax_cat statement
 declare_syntax_cat definition
 declare_syntax_cat constraint
-
 declare_syntax_cat annotable_events
 declare_syntax_cat predefined_events
-
 declare_syntax_cat predefined_relations
 
+scoped syntax reserved : expr
 scoped syntax primitive : reserved
 scoped syntax keyword : reserved
 scoped syntax name : reserved
+scoped syntax predefined_events : reserved
+scoped syntax predefined_relations : reserved
 
 scoped syntax "and" : keyword
 scoped syntax "as" : keyword
@@ -67,8 +61,6 @@ scoped syntax "FW" : name
 scoped syntax "id" : name
 scoped syntax "loc" : name
 scoped syntax "narrower" : name
-scoped syntax "po" : name
-scoped syntax "rf" : name
 scoped syntax "wider" : name
 
 -- annotable events.
@@ -82,19 +74,15 @@ scoped syntax "IW" : predefined_events -- initial writes
 scoped syntax "M" : predefined_events -- memory events, M = W ∪ R
 scoped syntax annotable_events : predefined_events
 
+/-- predefined_relations: -/
 scoped syntax "O" : predefined_relations -- empty relation
+scoped syntax "rf" : predefined_relations -- read from
+scoped syntax "co" : predefined_relations -- coherence order
 scoped syntax "id" : predefined_relations -- identity
 scoped syntax "loc" : predefined_relations -- same location
 scoped syntax "ext" : predefined_relations -- external (different pids)
 scoped syntax "po" : predefined_relations -- program order
-scoped syntax "rf" : predefined_relations -- read-from
 scoped syntax "rmw" : predefined_relations -- read-modify-write
-
--- syntax "co" : keyword
--- syntax "rf" : keyword
--- syntax "fr" : keyword
--- syntax "W" : keyword
--- syntax "M" : keyword
 
 scoped syntax keyword : dsl_term
 scoped syntax num : dsl_term
@@ -110,6 +98,7 @@ scoped syntax:60 expr:60 "*" expr:61 : expr
 scoped syntax expr "^" expr : expr
 scoped syntax expr "+" expr : expr
 scoped syntax expr "-" expr : expr
+scoped syntax:71 expr "^-1" : expr
 
 scoped syntax assertion expr ("as" ident)? : inst
 scoped syntax "let" ident "=" expr : inst
@@ -117,4 +106,4 @@ scoped syntax "let" ident "=" expr : inst
 scoped syntax "(*" ident* "*)" : inst
 scoped syntax "include" str : inst
 
-end Cat
+end CatGrammar
