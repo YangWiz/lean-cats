@@ -7,6 +7,9 @@ def union (r₁ r₂ : Rel Event Event) := λ x y ↦ r₁ x y ∨ r₂ x y
 def inter (r₁ r₂ : Rel Event Event) := λ x y ↦ r₁ x y ∧ r₂ x y
 def sequence (r₁ r₂ : Rel Event Event) := fun x z ↦ ∃ y, r₁ x y ∧ r₂ y z
 
+-- Not sure if this is the correct definition of cartesian product.
+def prod (s₁ s₂ : Set Event) : Rel Event Event := λ e₁ e₂ ↦ e₁ ∈ s₁ ∧ e₂ ∈ s₂
+
 #check Rel.inv
 
 @[simp] def internal : Rel Event Event :=
