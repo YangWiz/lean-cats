@@ -16,12 +16,18 @@ scoped syntax "[keyword|" keyword "]" : term
 scoped syntax "[assertion|" assertion "]" : term
 
 scoped syntax "[inst|" inst "]" : command
-scoped syntax "[model|inst" name command* "]" : model
+scoped syntax "[model|" ident command* "]" : command
+scoped syntax "[commands|" command* "]" : command
 scoped syntax "[annotable-events|" annotable_events "]" : term -- Set
 scoped syntax "[predefined-events|" predefined_events "]" : term
 scoped syntax "[reserved|" reserved "]" : term
 scoped syntax "[predefined-relations|" predefined_relations "]" : term
 scoped syntax "[dsl-term|" dsl_term "]" : term
+
+scoped macro "#commands_batch" cmds:command* : command => sorry
+
+scoped macro_rules
+  | `([model| $n:ident $cmds:command*]) => `(namespace $n #commands_batch end $n)
 
 scoped macro_rules
   | `([expr| $e₁:expr | $e₂:expr]) => `(CatRel.union [expr| $e₁] [expr| $e₂])
