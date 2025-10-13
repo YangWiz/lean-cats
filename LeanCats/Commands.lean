@@ -1,6 +1,5 @@
-import LeanCats.CatParser
-
-open Lean.Meta Lean Lean.Expr Elab
+import Lean
+open Lean.Meta Lean Expr Elab Command Parser
 
 elab "defcat" name:ident " := " "<" filename:str ">" : command => do
   Command.withNamespace name.getId do

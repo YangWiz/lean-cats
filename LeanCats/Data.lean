@@ -60,18 +60,14 @@ structure Events where
   (F : Set Event)
   (RMW : Set Event)
 
-def Events.empty : Events :=
-  {
-    W := {}
-    IW := {}
-    R := {}
-    B := {}
-    F := {}
-    RMW := {}
-  }
+def Rel.rf (e₁ e₂ : Event) : Prop :=
+  e₁.act.op = Op.write ∧ e₂.act.op = Op.read ∧ e₁.act.target = e₂.act.target
 
-instance Events.Inhabited : Inhabited Events :=
-  { default := Events.empty }
+def Rel.po (e₁ e₂ : Event) : Prop :=
+  e₁.t_id = e₂.t_id ∧ e₁.ln < e₂.ln
+
+def Rel.co (e₁ e₂ : Event) : Prop :=
+  e₁.act.op = Op.write ∧ e₂.act.op = Op.write ∧ e₁.act.target = e₂.act.target ∧ e₁.act.value = e₂.act.value
 
 /-- Each execution is abstracted to a candidate execution 〈evts , po, rf, co, IW, sr〉 providing
 This definination is different with the formal semantics, because the `co` is defined in [stdlib.cat](https://github.com/herd/herdtools7/blob/2a7599f8ecdbde0ed67925daf6534c1a0c26d535/herd-www/cat_includes/stdlib.cat) and
@@ -82,17 +78,12 @@ structure CandidateExecution where
   (rf : Rel Event Event)
   (co : Rel Event Event)
   (IW : Set Event)
-  (sr : Rel Event Event)
-deriving Inhabited
+
+def CandidateExecution.get (evts : Events) : CandidateExecution :=
+  { evts := evts, po := Rel.po, co := Rel.co, rf := Rel.rf, IW := evts.IW }
 
 def evts (es : Events) : Set Event :=
   es.B ∪ es.F ∪ es.IW ∪ es.R ∪ es.RMW ∪ es.W
-
-def Rel.empty : Rel Event Event := fun _ _ => False
-instance : EmptyCollection (Rel Event Event) := ⟨Rel.empty⟩
-
-def empty [Inhabited Events] : CandidateExecution :=
-  { evts := default , po := Rel.empty, co := Rel.empty, rf := Rel.empty, sr := Rel.empty, IW := {} }
 
 -- def Events (ce : CandidateExecution) : Type :=
 --   @Set.Elem Event {e | e ∈ ce.E}

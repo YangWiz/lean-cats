@@ -45,9 +45,12 @@ end TSO01
 -- The set of accepted candidate executions of SC is the subset of the TSO, because SC rejected more than TSO.
 -- Which means sc imples tso, the sc is stronger.
 -- In this case, if we find the ghb is acyclic then tso must also be acyclic because sc models more edges.
+
+-- https://leanprover-community.github.io/mathlib4_docs/Mathlib/Order/Defs/Unbundled.html#IsIrrefl
 theorem scvtso : ∀X : Data.CandidateExecution, SC.assert X → TSO01.assert X :=
 by
   intro X
   intro sc
   simp at *
+  unfold Irreflexive at sc
   sorry
