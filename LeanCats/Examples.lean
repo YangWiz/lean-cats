@@ -2,7 +2,16 @@ import LeanCats.Data
 import LeanCats.Relations
 
 namespace SC
-variable (X : Data.CandidateExecution)
+variable (evts : Data.Events)
+
+def X : Data.CandidateExecution :=
+  {
+    evts := evts
+    po := Data.Rel.po
+    co := Data.Rel.co
+    rf := Data.Rel.rf
+    IW := evts.IW
+  }
 
 /-! ### SC (Sequential Consistency) model reperesentation in Lean 4.
 Sequential Consistency is a memory model where the result of any execution is the same
@@ -11,34 +20,43 @@ and the operations of each individual thread appear in this sequence in the orde
 specified by its program.-/
 
 -- We define the communication between threads as com:
-@[simp] def fr := CatRel.sequence (Rel.inv X.rf) (X.co)
-@[simp] def com := CatRel.union X.rf (CatRel.union X.co (fr X))
+@[simp] def fr := CatRel.sequence (Rel.inv (X evts).rf) ((X evts).co)
+@[simp] def com := CatRel.union (X evts).rf (CatRel.union (X evts).co (fr evts))
 
 -- Then we union it with the po, the SC ensures that every instructions are executed in program order.
-@[simp] def sc := CatRel.union (com X) (X.po)
+@[simp] def sc := CatRel.union (com evts) ((X evts).po)
 
 -- We should avoid the cyclic, because the fr in a ghb will leads a overwritten that violates the program order.
-@[simp] def assert := CatRel.Acyclic (sc X)
+@[simp] def assert := CatRel.Acyclic (sc evts)
 
 end SC
 
 namespace TSO01
-variable (X : Data.CandidateExecution)
+variable (evts : Data.Events)
+
+def X : Data.CandidateExecution :=
+  {
+    evts := evts
+    po := Data.Rel.po
+    co := Data.Rel.co
+    rf := Data.Rel.rf
+    IW := evts.IW
+  }
 
 /-! ### SC (Sequential Consistency) model reperesentation in Lean 4.
 A TSO is a memory model that allows the write read out of order in the same thread (write buffer).-/
 
 -- We define the communication between threads as com as in SC:
-@[simp] def fr := CatRel.sequence (Rel.inv X.rf) (X.co)
-@[simp] def com := CatRel.union (CatRel.external ∪ X.rf) (X.co ∪ (fr X))
+@[simp] def fr := CatRel.sequence (Rel.inv (X evts).rf) ((X evts).co)
+@[simp] def com := CatRel.union (CatRel.external ∪ (X evts).rf) ((X evts).co ∪ (fr evts))
 
 -- Then we minus the internal read from and W*R from the po, because we allow them to be out of order.
-@[simp] def po_tso := X.po ∩ ((CatRel.prod CatRel.W CatRel.W) ∪ (CatRel.prod CatRel.R CatRel.M))
+@[simp] def po_tso := (X evts).po ∩ ((CatRel.prod CatRel.W CatRel.W) ∪ (CatRel.prod CatRel.R CatRel.M))
 
-@[simp] def ghb := (po_tso X) ∪ (com X)
+@[simp] def ghb := (po_tso evts) ∪ (com evts)
 
 -- We should avoid the cyclic, because the fr in a ghb will leads a overwritten that violates the program order.
-@[simp] def assert := CatRel.Acyclic (ghb X)
+@[simp] def assert := CatRel.Acyclic (ghb evts)
 
 end TSO01
 
@@ -47,9 +65,9 @@ end TSO01
 -- In this case, if we find the ghb is acyclic then tso must also be acyclic because sc models more edges.
 
 -- https://leanprover-community.github.io/mathlib4_docs/Mathlib/Order/Defs/Unbundled.html#IsIrrefl
-theorem scvtso : ∀X : Data.CandidateExecution, SC.assert X → TSO01.assert X :=
+theorem scvtso : ∀evts : Data.Events, SC.assert evts → TSO01.assert evts :=
 by
-  intro X
+  intro evts
   intro sc
   simp at *
   unfold Irreflexive at sc
