@@ -63,11 +63,11 @@ structure Events where
 def Rel.rf (e₁ e₂ : Event) : Prop :=
   e₁.act.op = Op.write ∧ e₂.act.op = Op.read ∧ e₁.act.target = e₂.act.target
 
+def Rel.fr (co : Rel Event Event) (e₁ e₂ : Event) : Prop :=
+  ∃ w: Event, w.act.op = Op.write ∧ Rel.rf w e₁ ∧ co w e₂
+
 def Rel.po (e₁ e₂ : Event) : Prop :=
   e₁.t_id = e₂.t_id ∧ e₁.ln < e₂.ln
-
-def Rel.co (e₁ e₂ : Event) : Prop :=
-  e₁.act.op = Op.write ∧ e₂.act.op = Op.write ∧ e₁.act.target = e₂.act.target ∧ e₁.act.value = e₂.act.value
 
 /-- Each execution is abstracted to a candidate execution 〈evts , po, rf, co, IW, sr〉 providing
 This definination is different with the formal semantics, because the `co` is defined in [stdlib.cat](https://github.com/herd/herdtools7/blob/2a7599f8ecdbde0ed67925daf6534c1a0c26d535/herd-www/cat_includes/stdlib.cat) and
@@ -76,11 +76,8 @@ structure CandidateExecution where
   (evts : Events)
   (po : Rel Event Event)
   (rf : Rel Event Event)
-  (co : Rel Event Event)
+  (fr : Rel Event Event)
   (IW : Set Event)
-
-def CandidateExecution.get (evts : Events) : CandidateExecution :=
-  { evts := evts, po := Rel.po, co := Rel.co, rf := Rel.rf, IW := evts.IW }
 
 def evts (es : Events) : Set Event :=
   es.B ∪ es.F ∪ es.IW ∪ es.R ∪ es.RMW ∪ es.W

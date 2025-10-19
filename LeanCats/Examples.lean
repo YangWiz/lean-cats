@@ -69,6 +69,5 @@ theorem scvtso : ∀evts : Data.Events, SC.assert evts → TSO01.assert evts :=
 by
   intro evts
   intro sc
-  simp at *
-  unfold Irreflexive at sc
+  simp
   sorry
