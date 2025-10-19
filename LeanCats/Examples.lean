@@ -3,12 +3,13 @@ import LeanCats.Relations
 
 namespace SC
 variable (evts : Data.Events)
+variable (co : Rel Data.Event Data.Event)
 
 def X : Data.CandidateExecution :=
   {
     evts := evts
     po := Data.Rel.po
-    co := Data.Rel.co
+    fr := Data.Rel.fr co
     rf := Data.Rel.rf
     IW := evts.IW
   }
@@ -20,14 +21,13 @@ and the operations of each individual thread appear in this sequence in the orde
 specified by its program.-/
 
 -- We define the communication between threads as com:
-@[simp] def fr := CatRel.sequence (Rel.inv (X evts).rf) ((X evts).co)
-@[simp] def com := CatRel.union (X evts).rf (CatRel.union (X evts).co (fr evts))
+@[simp] def com := CatRel.union (X evts co).rf (CatRel.union co (X evts co).fr)
 
 -- Then we union it with the po, the SC ensures that every instructions are executed in program order.
-@[simp] def sc := CatRel.union (com evts) ((X evts).po)
+@[simp] def sc := CatRel.union (com evts co) ((X evts co).po)
 
 -- We should avoid the cyclic, because the fr in a ghb will leads a overwritten that violates the program order.
-@[simp] def assert := CatRel.Acyclic (sc evts)
+@[simp] def assert := CatRel.Acyclic (sc evts co)
 
 end SC
 
