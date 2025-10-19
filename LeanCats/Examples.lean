@@ -33,12 +33,13 @@ end SC
 
 namespace TSO01
 variable (evts : Data.Events)
+variable (co : Rel Data.Event Data.Event)
 
 def X : Data.CandidateExecution :=
   {
     evts := evts
     po := Data.Rel.po
-    co := Data.Rel.co
+    fr := Data.Rel.fr co
     rf := Data.Rel.rf
     IW := evts.IW
   }
@@ -47,16 +48,15 @@ def X : Data.CandidateExecution :=
 A TSO is a memory model that allows the write read out of order in the same thread (write buffer).-/
 
 -- We define the communication between threads as com as in SC:
-@[simp] def fr := CatRel.sequence (Rel.inv (X evts).rf) ((X evts).co)
-@[simp] def com := CatRel.union (CatRel.external ∪ (X evts).rf) ((X evts).co ∪ (fr evts))
+@[simp] def com := CatRel.union (CatRel.external ∪ (X evts co).rf) (co ∪ ((X evts co).fr))
 
 -- Then we minus the internal read from and W*R from the po, because we allow them to be out of order.
-@[simp] def po_tso := (X evts).po ∩ ((CatRel.prod CatRel.W CatRel.W) ∪ (CatRel.prod CatRel.R CatRel.M))
+@[simp] def po_tso := (X evts co).po ∩ ((CatRel.prod CatRel.W CatRel.W) ∪ (CatRel.prod CatRel.R CatRel.M))
 
-@[simp] def ghb := (po_tso evts) ∪ (com evts)
+@[simp] def ghb := (po_tso evts co) ∪ (com evts co)
 
 -- We should avoid the cyclic, because the fr in a ghb will leads a overwritten that violates the program order.
-@[simp] def assert := CatRel.Acyclic (ghb evts)
+@[simp] def assert := CatRel.Acyclic (ghb evts co)
 
 end TSO01
 
@@ -65,9 +65,8 @@ end TSO01
 -- In this case, if we find the ghb is acyclic then tso must also be acyclic because sc models more edges.
 
 -- https://leanprover-community.github.io/mathlib4_docs/Mathlib/Order/Defs/Unbundled.html#IsIrrefl
-theorem scvtso : ∀evts : Data.Events, SC.assert evts → TSO01.assert evts :=
+theorem scvtso (evts : Data.Events) (co : Rel Data.Event Data.Event) : SC.assert evts co → TSO01.assert evts co :=
 by
-  intro evts
-  intro sc
   simp
+  intro sc
   sorry
