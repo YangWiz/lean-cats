@@ -23,7 +23,7 @@ structure Action : Type where
 deriving Inhabited, BEq, Repr, DecidableEq
 
 structure Event where
-  (id : String)   -- Unique identifier
+  (id : Nat)   -- Unique identifier
   (t_id : Nat)      -- Thread ID
   (t : Thread)    -- Associated thread
   (ln : Nat)        -- Line number or position
@@ -53,12 +53,16 @@ inductive Judgement
 -- branch events, gathered in the set B;
 -- fences, gathered in the set F.
 structure Events where
+  (uniqueId : ∀e₁ e₂ : Event, e₁ = e₂ -> e₁.id = e₁.id)
   (W : Set Event)
   (IW : Set Event)
   (R : Set Event)
   (B : Set Event)
   (F : Set Event)
   (RMW : Set Event)
+
+instance : Membership Event Events where
+  mem evts evt := evt ∈ evts.B ∪ evts.F ∪ evts.IW ∪ evts.R ∪ evts.RMW ∪ evts.W
 
 def Rel.rf (e₁ e₂ : Event) : Prop :=
   e₁.act.op = Op.write ∧ e₂.act.op = Op.read ∧ e₁.act.target = e₂.act.target
@@ -78,9 +82,6 @@ structure CandidateExecution where
   (rf : Rel Event Event)
   (fr : Rel Event Event)
   (IW : Set Event)
-
-def evts (es : Events) : Set Event :=
-  es.B ∪ es.F ∪ es.IW ∪ es.R ∪ es.RMW ∪ es.W
 
 -- def Events (ce : CandidateExecution) : Type :=
 --   @Set.Elem Event {e | e ∈ ce.E}
