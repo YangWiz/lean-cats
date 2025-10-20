@@ -1,11 +1,15 @@
 import LeanCats.Data
 import LeanCats.Relations
 
+open CatRel
+open Data
+
 namespace SC
 variable (evts : Data.Events)
 variable (co : Rel Data.Event Data.Event)
 
-def X : Data.CandidateExecution :=
+
+@[simp] def X : Data.CandidateExecution :=
   {
     evts := evts
     po := Data.Rel.po
@@ -21,21 +25,21 @@ and the operations of each individual thread appear in this sequence in the orde
 specified by its program.-/
 
 -- We define the communication between threads as com:
-@[simp] def com := CatRel.union (X evts co).rf (CatRel.union co (X evts co).fr)
+@[simp] def com := union (X evts co).rf (union co (X evts co).fr)
 
 -- Then we union it with the po, the SC ensures that every instructions are executed in program order.
-@[simp] def sc := CatRel.union (com evts co) ((X evts co).po)
+@[simp] def sc := union (com evts co) ((X evts co).po)
 
 -- We should avoid the cyclic, because the fr in a ghb will leads a overwritten that violates the program order.
-@[simp] def assert := CatRel.Acyclic (sc evts co)
+@[simp] def assert := Acyclic (sc evts co)
 
 end SC
 
 namespace TSO01
-variable (evts : Data.Events)
-variable (co : Rel Data.Event Data.Event)
+variable (evts : Events)
+variable (co : Rel Event Event)
 
-def X : Data.CandidateExecution :=
+@[simp] def X : CandidateExecution :=
   {
     evts := evts
     po := Data.Rel.po
@@ -48,15 +52,15 @@ def X : Data.CandidateExecution :=
 A TSO is a memory model that allows the write read out of order in the same thread (write buffer).-/
 
 -- We define the communication between threads as com as in SC:
-@[simp] def com := CatRel.union (CatRel.external ∪ (X evts co).rf) (co ∪ ((X evts co).fr))
+@[simp] def com := union (external ∪ (X evts co).rf) (co ∪ ((X evts co).fr))
 
 -- Then we minus the internal read from and W*R from the po, because we allow them to be out of order.
-@[simp] def po_tso := (X evts co).po ∩ ((CatRel.prod CatRel.W CatRel.W) ∪ (CatRel.prod CatRel.R CatRel.M))
+@[simp] def po_tso := (X evts co).po ∩ ((prod W W) ∪ (prod R M))
 
 @[simp] def ghb := (po_tso evts co) ∪ (com evts co)
 
 -- We should avoid the cyclic, because the fr in a ghb will leads a overwritten that violates the program order.
-@[simp] def assert := CatRel.Acyclic (ghb evts co)
+@[simp] def assert := Acyclic (ghb evts co)
 
 end TSO01
 
@@ -69,4 +73,6 @@ theorem scvtso (evts : Data.Events) (co : Rel Data.Event Data.Event) : SC.assert
 by
   simp
   intro sc
+
+
   sorry
