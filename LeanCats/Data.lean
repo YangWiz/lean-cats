@@ -30,15 +30,6 @@ structure Event where
   (act : Action) -- Action performed
 deriving Inhabited, BEq, Repr, DecidableEq
 
--- Cat Language Types:
--- evt (event),
--- tag (tag),
--- rel (relation between events),
--- set (set),
--- tuple (tuple),
--- enum (enumeration of tags),
--- fun (unary function type),
--- proc (unary procedure type).
 abbrev evt := Event
 
 inductive error
@@ -82,23 +73,5 @@ structure CandidateExecution where
   (rf : Rel Event Event)
   (fr : Rel Event Event)
   (IW : Set Event)
-
--- def Events (ce : CandidateExecution) : Type :=
---   @Set.Elem Event {e | e ∈ ce.E}
---
--- def coeRel (ce : CandidateExecution) (r : Rel Event Event) :
---   Rel ce.Events ce.Events :=
---   fun x y => r x.val y.val
---
--- instance {ce : CandidateExecution} :
---   Coe (Rel Event Event) (Rel ce.Events ce.Events) :=
---   ⟨coeRel ce⟩
---
--- structure IsWellFormed (ce : CandidateExecution) where
---   poTotal : IsStrictTotalOrder ce.Events (ce.coeRel ce.po)
---   -- what else?
-
--- We later prove that this constructor makes well-formed CEs
--- This is not the case right now.
 
 end Data
