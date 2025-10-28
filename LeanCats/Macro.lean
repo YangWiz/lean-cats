@@ -8,14 +8,14 @@ open Lean Elab Command
 open Data
 
 variable (evts : Events)
-variable (co : Rel Event Event)
+variable (co : Events -> Rel Event Event)
 
 def X : CandidateExecution :=
   {
     evts := evts
-    po := Rel.po
-    fr := Rel.fr co
-    rf := Rel.rf
+    po := Rel.po evts
+    fr := Rel.fr evts co
+    rf := Rel.rf evts
     IW := evts.IW
   }
 
@@ -117,6 +117,8 @@ scoped infixl:61 " | " => Set.union
 scoped infixl:61 " & " => Set.inter
 
 scoped infixl:61 " ; " => Rel.comp
+
+scoped infixl:61 " ∪ " => CatRel.union
 
 scoped postfix:61 "*" => Relation.ReflTransGen
 

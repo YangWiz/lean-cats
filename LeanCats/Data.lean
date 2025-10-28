@@ -23,10 +23,9 @@ structure Action : Type where
 deriving Inhabited, BEq, Repr, DecidableEq
 
 structure Event where
-  (id : Nat)   -- Unique identifier
+  (id : Nat)   -- Unique identifier, consistent with program order for a given thread
   (t_id : Nat)      -- Thread ID
   (t : Thread)    -- Associated thread
-  (ln : Nat)        -- Line number or position
   (act : Action) -- Action performed
 deriving Inhabited, BEq, Repr, DecidableEq
 
@@ -44,7 +43,7 @@ inductive Judgement
 -- branch events, gathered in the set B;
 -- fences, gathered in the set F.
 structure Events where
-  (uniqueId : ∀e₁ e₂ : Event, e₁ = e₂ -> e₁.id = e₁.id)
+  (uniqueId : ∀e₁ e₂ : Event, e₁ = e₂ ↔ e₁.id = e₂.id)
   (W : Set Event)
   (IW : Set Event)
   (R : Set Event)
@@ -55,14 +54,20 @@ structure Events where
 instance : Membership Event Events where
   mem evts evt := evt ∈ evts.B ∪ evts.F ∪ evts.IW ∪ evts.R ∪ evts.RMW ∪ evts.W
 
-def Rel.rf (e₁ e₂ : Event) : Prop :=
-  e₁.act.op = Op.write ∧ e₂.act.op = Op.read ∧ e₁.act.target = e₂.act.target
+@[simp] def internal (evts : Events) : Rel Event Event :=
+  λ e₁ e₂ ↦ e₁ ∈ evts ∧ e₂ ∈ evts ∧ e₁.t_id = e₂.t_id
 
-def Rel.fr (co : Rel Event Event) (e₁ e₂ : Event) : Prop :=
-  ∃ w: Event, w.act.op = Op.write ∧ Rel.rf w e₁ ∧ co w e₂
+@[simp] def external (evts : Events) : Rel Event Event :=
+  λ e₁ e₂ ↦ ¬(internal evts e₁ e₂)
 
-def Rel.po (e₁ e₂ : Event) : Prop :=
-  e₁.t_id = e₂.t_id ∧ e₁.ln < e₂.ln
+def Rel.rf (evts : Events) (e₁ e₂ : Event) : Prop :=
+  e₁ ∈ evts ∧ e₂ ∈ evts ∧ e₁.act.op = Op.write ∧ e₂.act.op = Op.read ∧ e₁.act.target = e₂.act.target
+
+def Rel.fr (evts : Events) (co : Events -> Rel Event Event) (e₁ e₂ : Event) : Prop :=
+  ∃ w: Event, w.act.op = Op.write ∧ Rel.rf evts w e₁ ∧ co evts w e₂
+
+def Rel.po (evts : Events) (e₁ e₂ : Event) : Prop :=
+  internal evts e₁ e₂ ∧ e₁.id < e₂.id
 
 /-- Each execution is abstracted to a candidate execution 〈evts , po, rf, co, IW, sr〉 providing
 This definination is different with the formal semantics, because the `co` is defined in [stdlib.cat](https://github.com/herd/herdtools7/blob/2a7599f8ecdbde0ed67925daf6534c1a0c26d535/herd-www/cat_includes/stdlib.cat) and
