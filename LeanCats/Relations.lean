@@ -92,6 +92,15 @@ instance (evts : Events) : IsStrictOrder Event (rf evts) where
 
     exact ⟨lIn, rIn, lWrite, rRead, sameTarget⟩
 
+theorem rfIsTransitive {evts : Events} : Transitive (rf evts) :=
+  by
+    intro a b c
+    intro rab rbc
+    obtain ⟨lInab, rInab, lWriteab, rReadab, sameTargetab⟩ := rab
+    obtain ⟨lInbc, rInbc, lWritebc, rReadbc, sameTargetbc⟩ := rbc
+    rw [<-sameTargetab] at sameTargetbc
+    exact ⟨lInab, rInbc, lWriteab, rReadbc, sameTargetbc⟩
+
 -- This defines:
 -- Write event must exists
 -- Write equlity (If the two write events write to the same read event, then these two writes are the same)
