@@ -5,35 +5,6 @@ open CatRel
 open Data
 
 -- Relation composition (Relation sequence in cat definition).
-infix:61 ";" => Comp
-
-def phx (r₁ r₂ : Rel Event Event) := ReflGen (TransGen (r₁ ; r₂))
-
-@[simp] def hx (r₁ r₂ : Rel Event Event) := (ReflGen r₁ ; phx r₁ r₂) ; ReflGen r₂
-
-lemma hxIsTransitive
-  (r₁ r₂ : Rel Event Event)
-  (hr₁ : Transitive r₁)
-  (hr₂ : Transitive r₂)
-  : Transitive (hx r₁ r₂) :=
-  by
-    unfold Transitive
-    intro x y z
-    intro hxy
-    intro hyz
-    simp at hxy
-    unfold Comp at hxy
-
--- Key lemma
-lemma CycleInUnionImpliesCycleInComp
-  {r₁ r₂ : Rel Event Event}
-  (hnrlxr₁ : Irreflexive r₁)
-  (hnrlxr₂ : Irreflexive r₂)
-  (htransr₁ : Transitive r₁)
-  (htransr₂ : Transitive r₂) :
-  Irreflexive (TransGen (r₁ ∪ r₂)) -> Irreflexive (TransGen (r₁ ; r₂)) := sorry
-
-
 lemma internalImpliesPoOrPoMinusOne {e₁ e₂ : Event} (evts : Events) :
   internal evts e₁ e₂ -> e₁ ≠ e₂ -> po evts e₁ e₂ ∨ po evts e₂ e₁ :=
   by
