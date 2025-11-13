@@ -46,7 +46,7 @@ instance : Inter (Rel Event Event) := ⟨inter⟩
   False
 
 @[simp] def Rel.loc (e₁ e₂ : Event) : Prop :=
-  e₁.act.target = e₂.act.target
+  e₁.act.location = e₂.act.location
 
 @[simp] def Rel.ext (e₁ e₂ : Event) : Prop :=
   e₁.t_id ≠ e₂.t_id
@@ -60,10 +60,20 @@ structure rf (evts : Events) (e₁ e₂ : Event) : Prop where
   rIn : e₂ ∈ evts
   lWrite : e₁.act.op = Op.write
   rRead : e₂.act.op = Op.read
-  sameTarget : e₁.act.target = e₂.act.target
+  sameTarget : e₁.act.location = e₂.act.location
 
-@[simp] def fr (evts : Events) (co : Events -> Rel Event Event) (e1 e2 : Event) : Prop :=
-  ∃w, isWrite w ∧ rf evts w e1 ∧ co evts w e2
+@[simp] def internal (evts : Events) : Rel Event Event :=
+  λ e₁ e₂ ↦ e₁ ∈ evts ∧ e₂ ∈ evts ∧ e₁.t_id = e₂.t_id
+
+@[simp] def external (evts : Events) : Rel Event Event :=
+  λ e₁ e₂ ↦ ¬(internal evts e₁ e₂)
+
+@[simp] def isWriteSameLoc (l : Location) (e : Event) :=
+  e.act.op = Op.write ∧ e.act.location = l
+
+def po (evts : Events) (e₁ e₂ : Event) : Prop :=
+  internal evts e₁ e₂ ∧ e₁.id < e₂.id
+
 
 instance (evts : Events) : IsStrictOrder Event (rf evts) where
   irrefl :=
@@ -83,10 +93,10 @@ instance (evts : Events) : IsStrictOrder Event (rf evts) where
     have rIn : c ∈ evts := by apply hrfbc.rIn
     have lWrite : a.act.op = Op.write := by apply hrfab.lWrite
     have rRead : c.act.op = Op.read := by apply hrfbc.rRead
-    have sameTarget : a.act.target = c.act.target :=
+    have sameTarget : a.act.location = c.act.location :=
     by
-      have abSameTarget : a.act.target = b.act.target := by apply hrfab.sameTarget
-      have bcSameTarget : b.act.target = c.act.target := by apply hrfbc.sameTarget
+      have abSameTarget : a.act.location = b.act.location := by apply hrfab.sameTarget
+      have bcSameTarget : b.act.location = c.act.location := by apply hrfbc.sameTarget
       rw [abSameTarget]
       rw [bcSameTarget]
 
@@ -109,12 +119,30 @@ structure rf.wellformed (evts : Events) (e₁ e₂ : Event) extends rf evts e₁
     (∃w, isWrite w ∧ rf evts w r)
     ∧ (∀ w₁ w₂, rf evts w₁ r -> rf evts w₂ r -> w₁ = w₂)
 
-def comPlus (evts : Events) (co : Events -> Rel Event Event) (e₁ e₂ : Event) :=
-  rf evts e₁ e₂ ∨ co evts e₁ e₂ ∨ fr evts co e₁ e₂
-  ∨ Relation.Comp (co evts) (rf evts) e₁ e₂ ∨ Relation.Comp (fr evts co) (rf evts) e₁ e₂
+structure preCo (evts : Events) (e₁ e₂ : Event) : Prop where
+  lIn : e₁ ∈ evts
+  rIn : e₂ ∈ evts
+  lWrite : isWrite e₁
+  rWrite : isWrite e₂
 
-def com (evts : Events) (co : Events -> Rel Event Event) (e₁ e₂ : Event) :=
-  rf evts e₁ e₂ ∨ co evts e₁ e₂ ∨ fr evts co e₁ e₂
+-- TODO: Check if this definition follows the Coq definition in diy7.
+structure co.wellformed
+  (evts : Events)
+  [IsStrictTotalOrder Event (preCo evts)]
+  (e₁ e₂ : Event)
+  extends preCo evts e₁ e₂
 
+@[simp] def fr
+  (evts : Events)
+  (e1 e2 : Event)
+  [IsStrictTotalOrder Event (preCo evts)]
+  : Prop :=
+  ∃w, isWrite w ∧ rf evts w e1 ∧ co.wellformed evts w e2
+
+def com
+  (evts : Events)
+  [IsStrictTotalOrder Event (preCo evts)]
+  (e₁ e₂ : Event) :=
+  rf.wellformed evts e₁ e₂ ∨ co.wellformed evts e₁ e₂ ∨ fr evts e₁ e₂
 
 end CatRel
