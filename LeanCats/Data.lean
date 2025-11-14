@@ -13,9 +13,11 @@ inductive Op : Type where
   | branch : Op
 deriving Inhabited, BEq, Repr, DecidableEq
 
+abbrev Location := String
+
 structure Action : Type where
-  op: Op
-  target : String
+  op : Op
+  location : Location
   -- For read, the value can not be determined at the begining.
   value : Option Nat
   isFirstWrite : Bool
@@ -53,21 +55,6 @@ structure Events where
 
 instance : Membership Event Events where
   mem evts evt := evt ∈ evts.B ∪ evts.F ∪ evts.IW ∪ evts.R ∪ evts.RMW ∪ evts.W
-
-@[simp] def internal (evts : Events) : Rel Event Event :=
-  λ e₁ e₂ ↦ e₁ ∈ evts ∧ e₂ ∈ evts ∧ e₁.t_id = e₂.t_id
-
-@[simp] def external (evts : Events) : Rel Event Event :=
-  λ e₁ e₂ ↦ ¬(internal evts e₁ e₂)
-
-def Rel.rf (evts : Events) (e₁ e₂ : Event) : Prop :=
-  e₁ ∈ evts ∧ e₂ ∈ evts ∧ e₁.act.op = Op.write ∧ e₂.act.op = Op.read ∧ e₁.act.target = e₂.act.target
-
-def Rel.fr (evts : Events) (co : Events -> Rel Event Event) (e₁ e₂ : Event) : Prop :=
-  ∃ w: Event, w.act.op = Op.write ∧ Rel.rf evts w e₁ ∧ co evts w e₂
-
-def Rel.po (evts : Events) (e₁ e₂ : Event) : Prop :=
-  internal evts e₁ e₂ ∧ e₁.id < e₂.id
 
 /-- Each execution is abstracted to a candidate execution 〈evts , po, rf, co, IW, sr〉 providing
 This definination is different with the formal semantics, because the `co` is defined in [stdlib.cat](https://github.com/herd/herdtools7/blob/2a7599f8ecdbde0ed67925daf6534c1a0c26d535/herd-www/cat_includes/stdlib.cat) and

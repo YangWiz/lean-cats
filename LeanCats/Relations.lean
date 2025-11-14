@@ -30,8 +30,7 @@ instance : Inter (Rel Event Event) := ⟨inter⟩
 @[simp] def Rel.prod' (lhs rhs : Event -> Prop) : Rel Event Event :=
   λ e₁ e₂ ↦ lhs e₁ ∧ rhs e₂
 
-@[simp] def Acyclic (r : Rel Event Event) : Prop
-  := Irreflexive (Relation.TransGen r)
+abbrev Acyclic (r : Rel Event Event) := ∀a : Event, ¬ Relation.TransGen r a a
 
 @[simp] def Rel.internal (e₁ e₂ : Event) : Prop :=
   e₁.t_id = e₂.t_id
@@ -73,7 +72,6 @@ structure rf (evts : Events) (e₁ e₂ : Event) : Prop where
 
 def po (evts : Events) (e₁ e₂ : Event) : Prop :=
   internal evts e₁ e₂ ∧ e₁.id < e₂.id
-
 
 instance (evts : Events) : IsStrictOrder Event (rf evts) where
   irrefl :=
@@ -134,8 +132,8 @@ structure co.wellformed
 
 @[simp] def fr
   (evts : Events)
-  (e1 e2 : Event)
   [IsStrictTotalOrder Event (preCo evts)]
+  (e1 e2 : Event)
   : Prop :=
   ∃w, isWrite w ∧ rf evts w e1 ∧ co.wellformed evts w e2
 

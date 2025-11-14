@@ -4,6 +4,7 @@ open Relation
 open CatRel
 open Data
 
+
 -- Relation composition (Relation sequence in cat definition).
 lemma internalImpliesPoOrPoMinusOne {e₁ e₂ : Event} (evts : Events) :
   internal evts e₁ e₂ -> e₁ ≠ e₂ -> po evts e₁ e₂ ∨ po evts e₂ e₁ :=
@@ -51,41 +52,41 @@ lemma internalImpliesPoOrPoMinusOne {e₁ e₂ : Event} (evts : Events) :
       }
     }
 
-lemma rfAndFrIsCo (evts : Events) (co : Events -> Rel Event Event) (e₁ e₂ e₃ : Event) :
-  (rf.wellformed evts e₁ e₂ ∧ fr evts co e₂ e₃) -> co evts e₁ e₃ :=
-  by
-    intro hrffr
-    have hrf : rf.wellformed evts e₁ e₂ := by apply And.left hrffr
-    have hfr : fr evts co e₂ e₃ := by apply And.right hrffr
-    simp at hfr
-    have hwunique : e₂.act.op = Op.read -> (∃w, isWrite w ∧ rf evts w e₂) ∧ (∀ w₁ w₂, rf evts w₁ e₂ -> rf evts w₂ e₂ -> w₁ = w₂) :=
-    by
-      exact hrf.wExtAndUnique
-
-    simp at *
-    let ⟨w, hw⟩ := hfr
-    -- At this point, what we want to get is w is e₁.
-    have sameW :
-      (∃ w, w.act.op = Op.write ∧ rf evts w e₂)
-      ∧ ∀ (w₁ w₂ : Event), rf evts w₁ e₂ → rf evts w₂ e₂ → w₁ = w₂ :=
-    by
-      apply hwunique
-      apply hrf.rRead
-    have hwe₁ : (e₁ = w) :=
-    by
-      apply And.right sameW
-      {
-        obtain ⟨hrfin, hunique⟩ := hrf
-        exact hrfin
-      }
-      {
-        obtain ⟨left, mid, right⟩ := hw
-        exact mid
-      }
-
-    obtain ⟨left, mid, right⟩ := hw
-    rw [<-hwe₁] at right
-    exact right
+-- lemma rfAndFrIsCo (evts : Events) (co : Events -> Rel Event Event) (e₁ e₂ e₃ : Event) :
+--   (rf.wellformed evts e₁ e₂ ∧ fr evts co e₂ e₃) -> co evts e₁ e₃ :=
+--   by
+--     intro hrffr
+--     have hrf : rf.wellformed evts e₁ e₂ := by apply And.left hrffr
+--     have hfr : fr evts co e₂ e₃ := by apply And.right hrffr
+--     simp at hfr
+--     have hwunique : e₂.act.op = Op.read -> (∃w, isWrite w ∧ rf evts w e₂) ∧ (∀ w₁ w₂, rf evts w₁ e₂ -> rf evts w₂ e₂ -> w₁ = w₂) :=
+--     by
+--       exact hrf.wExtAndUnique
+--
+--     simp at *
+--     let ⟨w, hw⟩ := hfr
+--     -- At this point, what we want to get is w is e₁.
+--     have sameW :
+--       (∃ w, w.act.op = Op.write ∧ rf evts w e₂)
+--       ∧ ∀ (w₁ w₂ : Event), rf evts w₁ e₂ → rf evts w₂ e₂ → w₁ = w₂ :=
+--     by
+--       apply hwunique
+--       apply hrf.rRead
+--     have hwe₁ : (e₁ = w) :=
+--     by
+--       apply And.right sameW
+--       {
+--         obtain ⟨hrfin, hunique⟩ := hrf
+--         exact hrfin
+--       }
+--       {
+--         obtain ⟨left, mid, right⟩ := hw
+--         exact mid
+--       }
+--
+--     obtain ⟨left, mid, right⟩ := hw
+--     rw [<-hwe₁] at right
+--     exact right
 
 -- lemma scIsTransitive (evts : Events) (co : Events -> Rel Event Event) : Transitive (sc evts co) :=
 --   by
@@ -94,13 +95,22 @@ lemma rfAndFrIsCo (evts : Events) (co : Events -> Rel Event Event) (e₁ e₂ e�
 --     intro hab
 --     intro hbc
 
-class StrictPartialOrder (r : Rel Event Event) extends IsStrictOrder Event r, IsAsymm Event r
+lemma comIsTransitive
+  (evts : Events)
+  [h : IsStrictTotalOrder Event (preCo evts)]
+  : Transitive (com evts) :=
+  by
+    unfold Transitive
+    intro x y z
+    sorry
+
+-- TODO(Zhiyang): Why we don't need asym.
+-- class StrictPartialOrder (r : Rel Event Event) extends IsStrictOrder Event r
 
 lemma strictPartialOrderImpliesAcyclic
   {r : Rel Event Event}
-  [hr : StrictPartialOrder r]
-  (e : Event) :
-  ¬TransGen r e e :=
+  (hr : IsStrictOrder Event r)
+  : ∀e, ¬TransGen r e e :=
   by
     rw [Relation.transGen_eq_self]
     {
@@ -110,6 +120,47 @@ lemma strictPartialOrderImpliesAcyclic
       unfold Transitive
       apply hr.trans
     }
+
+lemma AcyclicImpliesIrreflexive
+  {r : Rel Event Event}
+  (hnt : ∀e, ¬TransGen r e e)
+  : Irreflexive r :=
+  by
+    unfold Irreflexive
+    intro x
+    intro hrflx
+    apply hnt x
+    apply TransGen.single
+    exact hrflx
+
+instance
+  {r : Rel Event Event}
+  (ht : Transitive r)
+  (hnt : ∀e, ¬TransGen r e e)
+  : IsStrictOrder Event r where
+  irrefl := by
+    apply AcyclicImpliesIrreflexive
+    exact hnt
+  trans := by
+    apply ht
+
+lemma ayclicMono
+  {r₁ r₂ : Rel Event Event}
+  (hacyc : Acyclic r₂)
+  (hsub : ∀ a b, r₁ a b -> r₂ a b)
+  : Acyclic r₁ :=
+  by
+    have htransub : ∀ a b, TransGen r₁ a b -> TransGen r₂ a b :=
+      by
+        intro a b
+        apply TransGen.mono
+        apply hsub
+    unfold Acyclic at *
+    intro e
+    intro hr₁trans
+    apply hacyc
+    apply htransub
+    exact hr₁trans
 
 --- tso : Relation.TransGen
 ---   (Rel.po evts ∩ (prod W W ∪ prod R (R ∪ W)) ∪ union (external evts ∪ Rel.rf evts) (co evts ∪ Rel.fr evts co)) x x
