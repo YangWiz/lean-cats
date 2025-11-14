@@ -8,13 +8,14 @@ open Lean Elab Command
 open Data
 
 variable (evts : Events)
+variable (co : Events -> Rel Event Event)
 
 def X : CandidateExecution :=
   {
     evts := evts
-    po := Rel.po
-    co := Rel.co
-    rf := Rel.rf
+    po := Rel.po evts
+    fr := Rel.fr evts co
+    rf := Rel.rf evts
     IW := evts.IW
   }
 
@@ -46,19 +47,19 @@ scoped macro_rules
   | `([expr| $t:dsl_term]) => `([dsl-term| $t]) -- environemnt identifiers ρ, introduced by commands.
 
 scoped macro_rules
-  | `([dsl-term| $i:ident]) => `($i evts) -- Apply the variable X to identifier, otherwise the type signature will has a extra type (CandidateExecution).
+  | `([dsl-term| $i:ident]) => `($i evts co) -- Apply the variable X to identifier, otherwise the type signature will has a extra type (CandidateExecution).
 
 scoped macro_rules
   | `([reserved| $r:predefined_relations]) => `([predefined-relations| $r])
   | `([reserved| $e:predefined_events]) => `([predefined-events| $e])
 
 scoped macro_rules
-  | `([predefined-relations| co]) => `((X evts).co)
-  | `([predefined-relations| po]) => `((X evts).po)
-  | `([predefined-relations| rf]) => `((X evts).rf)
+  | `([predefined-relations| fr]) => `((X evts co).fr)
+  | `([predefined-relations| po]) => `((X evts co).po)
+  | `([predefined-relations| rf]) => `((X evts co).rf)
 
 scoped macro_rules
-  | `([predefined-events| W]) => `((X evts).evts.W)
+  | `([predefined-events| W]) => `((X evts co).evts.W)
 
 scoped macro_rules
   | `([keyword| and]) => Lean.Macro.throwUnsupported
@@ -88,10 +89,10 @@ scoped macro_rules
   | `([assertion| empty]) => `(IsEmpty)
 
 scoped macro_rules
-  | `([annotable-events| W]) => `((X evts).evts.W)
-  | `([annotable-events| R]) => `((X evts).evts.R)
-  | `([annotable-events| B]) => `((X evts).evts.B)
-  | `([annotable-events| F]) => `((X evts).evts.F)
+  | `([annotable-events| W]) => `((X evts co).evts.W)
+  | `([annotable-events| R]) => `((X evts co).evts.R)
+  | `([annotable-events| B]) => `((X evts co).evts.B)
+  | `([annotable-events| F]) => `((X evts co).evts.F)
   -- | `([annotable-events| W]) => `(λ E: CandidateExecution ↦ E.evts)
 
 scoped macro_rules
@@ -117,20 +118,18 @@ scoped infixl:61 " & " => Set.inter
 
 scoped infixl:61 " ; " => Rel.comp
 
+scoped infixl:61 " ∪ " => CatRel.union
+
 scoped postfix:61 "*" => Relation.ReflTransGen
 
 -- The macro is bidirective (from left to right and from right to left).
 scoped postfix:61 "+" => Relation.TransGen
 
-def test₁ : Rel Event Event := (X evts).co
-
-[inst| let fr = rf^-1 ; co]
-[inst| let com = rf | co | fr]
 [inst| let poo = W*W]
-[inst| let ghb = po | com]
+[inst| let ghb = po]
 
 #check ghb
 
-#check fr
+#check [predefined-relations| fr]
 
 end CatSemantics

@@ -1,15 +1,20 @@
 import LeanCats.Data
 import LeanCats.Relations
+import LeanCats.Theoriems
+
+open CatRel
+open Data
 
 namespace SC
 variable (evts : Data.Events)
+variable (coConst : IsStrictTotalOrder Event (preCo evts))
 
-def X : Data.CandidateExecution :=
+@[simp] def X [IsStrictTotalOrder Event (preCo evts)] : Data.CandidateExecution :=
   {
     evts := evts
-    po := Data.Rel.po
-    co := Data.Rel.co
-    rf := Data.Rel.rf
+    po := CatRel.po evts
+    fr := CatRel.fr evts
+    rf := CatRel.rf.wellformed evts
     IW := evts.IW
   }
 
@@ -20,26 +25,26 @@ and the operations of each individual thread appear in this sequence in the orde
 specified by its program.-/
 
 -- We define the communication between threads as com:
-@[simp] def fr := CatRel.sequence (Rel.inv (X evts).rf) ((X evts).co)
-@[simp] def com := CatRel.union (X evts).rf (CatRel.union (X evts).co (fr evts))
+@[simp] def com := (X evts).rf ∪ ((co.wellformed evts) ∪ (X evts).fr)
 
 -- Then we union it with the po, the SC ensures that every instructions are executed in program order.
-@[simp] def sc := CatRel.union (com evts) ((X evts).po)
+@[simp] def sc := (com evts coConst) ∪ ((X evts).po)
 
 -- We should avoid the cyclic, because the fr in a ghb will leads a overwritten that violates the program order.
-@[simp] def assert := CatRel.Acyclic (sc evts)
+@[simp] def assert := Acyclic (sc evts coConst)
 
 end SC
 
 namespace TSO01
-variable (evts : Data.Events)
+variable (evts : Events)
+variable (coConst : IsStrictTotalOrder Event (preCo evts))
 
-def X : Data.CandidateExecution :=
+@[simp] def X : CandidateExecution :=
   {
     evts := evts
-    po := Data.Rel.po
-    co := Data.Rel.co
-    rf := Data.Rel.rf
+    po := CatRel.po evts
+    fr := CatRel.fr evts
+    rf := CatRel.rf.wellformed evts
     IW := evts.IW
   }
 
@@ -47,16 +52,15 @@ def X : Data.CandidateExecution :=
 A TSO is a memory model that allows the write read out of order in the same thread (write buffer).-/
 
 -- We define the communication between threads as com as in SC:
-@[simp] def fr := CatRel.sequence (Rel.inv (X evts).rf) ((X evts).co)
-@[simp] def com := CatRel.union (CatRel.external ∪ (X evts).rf) ((X evts).co ∪ (fr evts))
+@[simp] def com := (external evts ∩ (X evts coConst).rf) ∪ (co.wellformed evts ∪ ((X evts coConst).fr))
 
 -- Then we minus the internal read from and W*R from the po, because we allow them to be out of order.
-@[simp] def po_tso := (X evts).po ∩ ((CatRel.prod CatRel.W CatRel.W) ∪ (CatRel.prod CatRel.R CatRel.M))
+@[simp] def po_tso := (X evts coConst).po ∩ ((prod W W) ∪ (prod R M))
 
-@[simp] def ghb := (po_tso evts) ∪ (com evts)
+@[simp] def ghb := (po_tso evts coConst) ∪ (com evts coConst)
 
 -- We should avoid the cyclic, because the fr in a ghb will leads a overwritten that violates the program order.
-@[simp] def assert := CatRel.Acyclic (ghb evts)
+@[simp] def assert := Acyclic (ghb evts coConst)
 
 end TSO01
 
@@ -65,10 +69,32 @@ end TSO01
 -- In this case, if we find the ghb is acyclic then tso must also be acyclic because sc models more edges.
 
 -- https://leanprover-community.github.io/mathlib4_docs/Mathlib/Order/Defs/Unbundled.html#IsIrrefl
-theorem scvtso : ∀evts : Data.Events, SC.assert evts → TSO01.assert evts :=
+theorem scvtso (evts : Data.Events) [coConst : IsStrictTotalOrder Event (preCo evts)] : SC.assert evts coConst → TSO01.assert evts coConst :=
 by
-  intro evts
+  simp
   intro sc
-  simp at *
-  unfold Irreflexive at sc
-  sorry
+  apply ayclicMono sc
+  intro a b
+  intro tso
+  cases tso with
+  | inl h => {
+    simp at h
+    apply Or.inr
+    obtain ⟨l, r⟩ := h
+    exact l
+  }
+  | inr h => {
+    obtain ⟨l⟩ := h
+    {
+      apply Or.inl
+      apply Or.inl
+      obtain ⟨l, r⟩ := l
+      exact r
+    }
+    {
+      rename_i h
+      apply Or.inl
+      apply Or.inr
+      exact h
+    }
+  }

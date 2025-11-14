@@ -77,7 +77,7 @@ scoped syntax annotable_events : predefined_events
 /-- predefined_relations: -/
 scoped syntax "O" : predefined_relations -- empty relation
 scoped syntax "rf" : predefined_relations -- read from
-scoped syntax "co" : predefined_relations -- coherence order
+scoped syntax "fr" : predefined_relations -- from read
 scoped syntax "id" : predefined_relations -- identity
 scoped syntax "loc" : predefined_relations -- same location
 scoped syntax "ext" : predefined_relations -- external (different pids)
