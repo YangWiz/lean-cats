@@ -2,30 +2,32 @@ import LeanCats.Syntax
 import Lean
 import LeanCats.Relations
 import LeanCats.Data
+import LeanCats.Basic
 
 namespace CatSemantics
 open Lean Elab Command
 open Data
 
-variable (evts : Events)
-variable (co : Events -> Rel Event Event)
+variable (evts : Data.Events)
+variable (coConst : IsStrictTotalOrder Event (CatRel.preCo evts))
 
-def X : CandidateExecution :=
+@[simp] def X : CandidateExecution :=
   {
     evts := evts
-    po := Rel.po evts
-    fr := Rel.fr evts co
-    rf := Rel.rf evts
+    po := CatRel.po evts
+    fr := CatRel.fr evts
+    rf := CatRel.rf.wellformed evts
     IW := evts.IW
   }
 
 open CatGrammar
+
 scoped syntax "[expr|" expr "]" : term
 scoped syntax "[keyword|" keyword "]" : term
 scoped syntax "[assertion|" assertion "]" : term
 
 scoped syntax "[inst|" inst "]" : command
-scoped syntax "[model|" ident command* "]" : command
+scoped syntax (name := model) "[model|" ident command* "]" : command
 scoped syntax "[commands|" command* "]" : command
 scoped syntax "[annotable-events|" annotable_events "]" : term -- Set
 scoped syntax "[predefined-events|" predefined_events "]" : term
@@ -33,9 +35,26 @@ scoped syntax "[reserved|" reserved "]" : term
 scoped syntax "[predefined-relations|" predefined_relations "]" : term
 scoped syntax "[dsl-term|" dsl_term "]" : term
 
-scoped macro_rules
-  | `([model| $n:ident $cmds:command*]) => `(namespace $n [commands| $cmds*] end $n)
+@[command_elab model] def modelElabHelper : CommandElab := fun stx =>
+  -- The idea is we use the macro to reduce the syntax first,
+  -- then we can use this elaborator to close the namespace.
+  match stx with
+  | `([model| $n:ident $cmds:command*]) => do
+    -- First we create the namespace.
+    let addName : TSyntax `command <- `(namespace $n)
+    elabNamespace addName
 
+    -- Then we introduce a bunch of variables for our models.
+    let evtsVar : TSyntax `command <- `(variable (evts : Data.Events))
+    let coConst : TSyntax `command <- `(variable (coConst : IsStrictTotalOrder Event (CatRel.preCo evts)))
+    elabVariable evtsVar
+    elabVariable coConst
+
+    -- Then we iterate all the commands one by one.
+    cmds.forM (fun cmd => elabCommand cmd)
+    let endName : TSyntax `command <- `(end $n)
+    elabEnd endName
+  | _ => throwUnsupportedSyntax
 
 scoped macro_rules
   | `([expr| $e₁:expr | $e₂:expr]) => `(CatRel.union [expr| $e₁] [expr| $e₂])
@@ -47,19 +66,19 @@ scoped macro_rules
   | `([expr| $t:dsl_term]) => `([dsl-term| $t]) -- environemnt identifiers ρ, introduced by commands.
 
 scoped macro_rules
-  | `([dsl-term| $i:ident]) => `($i evts co) -- Apply the variable X to identifier, otherwise the type signature will has a extra type (CandidateExecution).
+  | `([dsl-term| $i:ident]) => `($i evts coConst) -- Apply the variable X to identifier, otherwise the type signature will has a extra type (CandidateExecution).
 
 scoped macro_rules
   | `([reserved| $r:predefined_relations]) => `([predefined-relations| $r])
   | `([reserved| $e:predefined_events]) => `([predefined-events| $e])
 
 scoped macro_rules
-  | `([predefined-relations| fr]) => `((X evts co).fr)
-  | `([predefined-relations| po]) => `((X evts co).po)
-  | `([predefined-relations| rf]) => `((X evts co).rf)
+  | `([predefined-relations| fr]) => `((X evts coConst).fr)
+  | `([predefined-relations| po]) => `((X evts coConst).po)
+  | `([predefined-relations| rf]) => `((X evts coConst).rf)
 
 scoped macro_rules
-  | `([predefined-events| W]) => `((X evts co).evts.W)
+  | `([predefined-events| W]) => `((X evts coConst).evts.W)
 
 scoped macro_rules
   | `([keyword| and]) => Lean.Macro.throwUnsupported
@@ -89,10 +108,10 @@ scoped macro_rules
   | `([assertion| empty]) => `(IsEmpty)
 
 scoped macro_rules
-  | `([annotable-events| W]) => `((X evts co).evts.W)
-  | `([annotable-events| R]) => `((X evts co).evts.R)
-  | `([annotable-events| B]) => `((X evts co).evts.B)
-  | `([annotable-events| F]) => `((X evts co).evts.F)
+  | `([annotable-events| W]) => `((X evts coConst).evts.W)
+  | `([annotable-events| R]) => `((X evts coConst).evts.R)
+  | `([annotable-events| B]) => `((X evts coConst).evts.B)
+  | `([annotable-events| F]) => `((X evts coConst).evts.F)
   -- | `([annotable-events| W]) => `(λ E: CandidateExecution ↦ E.evts)
 
 scoped macro_rules
@@ -125,11 +144,15 @@ scoped postfix:61 "*" => Relation.ReflTransGen
 -- The macro is bidirective (from left to right and from right to left).
 scoped postfix:61 "+" => Relation.TransGen
 
-[inst| let poo = W*W]
-[inst| let ghb = po]
+[model| res def a := 1]
 
-#check ghb
+#check res.a
 
-#check [predefined-relations| fr]
+[inst| let a = po]
+
+#check a
 
 end CatSemantics
+
+open scoped CatSemantics
+open scoped CatGrammar

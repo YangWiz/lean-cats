@@ -1,6 +1,8 @@
 import LeanCats.Data
 import LeanCats.Relations
 import LeanCats.Theoriems
+import LeanCats.Basic
+import LeanCats.Macro
 
 open CatRel
 open Data
@@ -9,7 +11,7 @@ namespace SC
 variable (evts : Data.Events)
 variable (coConst : IsStrictTotalOrder Event (preCo evts))
 
-@[simp] def X [IsStrictTotalOrder Event (preCo evts)] : Data.CandidateExecution :=
+@[simp] def X : CandidateExecution :=
   {
     evts := evts
     po := CatRel.po evts
@@ -25,10 +27,10 @@ and the operations of each individual thread appear in this sequence in the orde
 specified by its program.-/
 
 -- We define the communication between threads as com:
-@[simp] def com := (X evts).rf ∪ ((co.wellformed evts) ∪ (X evts).fr)
+@[simp] def com := (X evts coConst).rf ∪ ((co.wellformed evts) ∪ (X evts coConst).fr)
 
 -- Then we union it with the po, the SC ensures that every instructions are executed in program order.
-@[simp] def sc := (com evts coConst) ∪ ((X evts).po)
+@[simp] def sc := (com evts coConst) ∪ ((X evts coConst).po)
 
 -- We should avoid the cyclic, because the fr in a ghb will leads a overwritten that violates the program order.
 @[simp] def assert := Acyclic (sc evts coConst)
@@ -69,7 +71,10 @@ end TSO01
 -- In this case, if we find the ghb is acyclic then tso must also be acyclic because sc models more edges.
 
 -- https://leanprover-community.github.io/mathlib4_docs/Mathlib/Order/Defs/Unbundled.html#IsIrrefl
-theorem scvtso (evts : Data.Events) [coConst : IsStrictTotalOrder Event (preCo evts)] : SC.assert evts coConst → TSO01.assert evts coConst :=
+theorem scvtso
+  (evts : Data.Events)
+  [coConst : IsStrictTotalOrder Event (preCo evts)]
+  : SC.assert evts coConst → TSO01.assert evts coConst :=
 by
   simp
   intro sc
@@ -98,3 +103,10 @@ by
       exact h
     }
   }
+
+-- Automated loading of memory model.
+-- Let's define the sc in the cat langague model instead of writing it explicitly.
+section Example1
+open CatGrammar
+
+end Example1
