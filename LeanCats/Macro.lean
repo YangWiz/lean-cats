@@ -21,8 +21,8 @@ syntax "[dsl-term|" dsl_term "]" : term
 
 macro_rules
   | `([expr| $e₁:expr | $e₂:expr]) =>
-    `(fun (evts : Events) [IsStrictTotalOrder (CatRel.preCo (evts))] =>
-      CatRel.union ([expr| $e₁] CandidateExecution evts) ([expr| $e₂] CandidateExecution evts))
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo (evts))] (X : CandidateExecution evts) =>
+      CatRel.union ([expr| $e₁] evts X) ([expr| $e₂] evts X))
 
   | `([expr| $e₁:expr & $e₂:expr]) =>
     `(fun X : CandidateExecution => CatRel.inter ([expr| $e₁] X) ([expr| $e₂] X))
@@ -138,9 +138,9 @@ def c := [predefined-relations| co]
 [model| test
   let b = po
   let c = po
-  let e = b
+  let e = b | c
 ]
 
-#check test.b
+#check test.e
 --
 -- #check test.e
