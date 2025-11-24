@@ -25,13 +25,16 @@ macro_rules
       CatRel.union ([expr| $e₁] evts X) ([expr| $e₂] evts X))
 
   | `([expr| $e₁:expr & $e₂:expr]) =>
-    `(fun X : CandidateExecution => CatRel.inter ([expr| $e₁] X) ([expr| $e₂] X))
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo (evts))] (X : CandidateExecution evts) =>
+      CatRel.inter ([expr| $e₁] evts X) ([expr| $e₂] evts X))
 
   | `([expr| $e₁:expr ; $e₂:expr]) =>
-    `(fun X : CandidateExecution => Rel.comp ([expr| $e₁] X) ([expr| $e₂] X))
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo (evts))] (X : CandidateExecution evts) =>
+      Rel.comp ([expr| $e₁] evts X) ([expr| $e₂] evts X))
 
   | `([expr| $e₁:expr * $e₂:expr]) =>
-    `(fun X : CandidateExecution => Set.prod ([expr| $e₁] X) ([expr| $e₂] X))
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo (evts))] (X : CandidateExecution evts) =>
+      CatRel.prod ([expr| $e₁] evts X) ([expr| $e₂] evts X))
 
   | `([expr| $e^-1]) =>
     `(fun X : CandidateExecution => Rel.inv ([expr| $e] X))
@@ -40,8 +43,13 @@ macro_rules
     `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) =>
       [reserved| $r] evts X)
 
+  | `([expr| ($e:expr)]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) =>
+      [expr| $e] evts X)
+
   | `([expr| $t:dsl_term]) =>
-    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) => [dsl-term| $t] evts X)
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) =>
+      [dsl-term| $t] evts X)
 
 macro_rules
   | `([dsl-term| $i:ident]) =>
@@ -72,9 +80,6 @@ macro_rules
       CatRel.co.wellformed evts)
 
 macro_rules
-  | `([predefined-events| W]) => `((X evts coConst).evts.W)
-
-macro_rules
   | `([keyword| and]) => Lean.Macro.throwUnsupported
   | `([keyword| as]) => Lean.Macro.throwUnsupported
   | `([keyword| begin]) => Lean.Macro.throwUnsupported
@@ -97,25 +102,37 @@ macro_rules
   | `([keyword| $a:assertion]) => `([assertion| $a])
 
 macro_rules
-  | `([assertion| irreflexive]) => `(Irreflexive)
-  | `([assertion| acyclic]) => `(Acyclic)
-  | `([assertion| empty]) => `(IsEmpty)
+  | `([assertion| irreflexive]) => `(CatRel.Irreflexive)
+  | `([assertion| acyclic]) => `(CatRel.Acyclic)
+  | `([assertion| empty]) => `(CatRel.IsEmpty)
 
 macro_rules
-  | `([annotable-events| W]) => `(fun X : CandidateExecution => X.evts.W)
-  | `([annotable-events| R]) => `(fun X : CandidateExecution => X.evts.R)
+  | `([annotable-events| W]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts)
+      => X.evts.W)
+  | `([annotable-events| R]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts)
+      => X.evts.R)
   | `([annotable-events| B]) => `(fun X : CandidateExecution => X.evts.B)
   | `([annotable-events| F]) => `(fun X : CandidateExecution => X.evts.F)
 
 macro_rules
   -- | `([predefined-events| ___]) => __ TODO!(figure all the definiations of all the events. (⋃?))
-  | `([predefined-events| IW]) => `(λ E: CandidateExecution ↦ E.evts.IW)
-  | `([predefined-events| M]) => `(λ E: CandidateExecution ↦ E.evts.W ∪ E.evts.R)
+  | `([predefined-events| IW]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts)
+      => X.evts.IW)
+
+  | `([predefined-events| M]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts)
+      => X.evts.W ∪ X.evts.R)
+
   | `([predefined-events| $a:annotable_events]) => `([annotable-events| $a])
 
 macro_rules
   | `([inst| let $nm = $e]) => `(def $nm := [expr|$e])
-  | `([inst| $a:assertion $e as $nm]) => `(def $nm : Prop := [assertion| $a] [expr| $e])
+  | `([inst| $a:assertion $e as $nm]) =>
+    `(def $nm (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) : Prop
+    := [assertion| $a] ([expr| $e] evts X))
   -- | `([inst| (* $_ *)]) => `(#print "")
 
 macro_rules
@@ -138,9 +155,9 @@ def c := [predefined-relations| co]
 [model| test
   let b = po
   let c = po
-  let e = b | c
+  let e = (po | po | po) & po
 ]
 
-#check test.e
+#reduce test.e
 --
 -- #check test.e
