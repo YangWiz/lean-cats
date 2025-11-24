@@ -7,18 +7,6 @@ import LeanCats.Basic
 open Lean Elab Command Term Meta
 open Data
 
-@[simp] def X
-  (evts : Events)
-  [IsStrictTotalOrder Event (CatRel.preCo evts)]
-  : CandidateExecution :=
-  {
-    evts := evts
-    _po := CatRel.po evts
-    _fr := CatRel.fr evts
-    _rf := CatRel.rf.wellformed evts
-    _IW := evts.IW
-  }
-
 syntax "[model|" ident inst* "]" : command
 syntax "[expr|" expr "]" : term
 syntax "[keyword|" keyword "]" : term
