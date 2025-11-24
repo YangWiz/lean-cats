@@ -21,7 +21,8 @@ syntax "[dsl-term|" dsl_term "]" : term
 
 macro_rules
   | `([expr| $e₁:expr | $e₂:expr]) =>
-    `(fun X : CandidateExecution => CatRel.union ([expr| $e₁] X) ([expr| $e₂] X))
+    `(fun (evts : Events) [IsStrictTotalOrder (CatRel.preCo (evts))] =>
+      CatRel.union ([expr| $e₁] CandidateExecution evts) ([expr| $e₂] CandidateExecution evts))
 
   | `([expr| $e₁:expr & $e₂:expr]) =>
     `(fun X : CandidateExecution => CatRel.inter ([expr| $e₁] X) ([expr| $e₂] X))
@@ -36,23 +37,39 @@ macro_rules
     `(fun X : CandidateExecution => Rel.inv ([expr| $e] X))
 
   | `([expr| $r:reserved]) =>
-    `(fun X : CandidateExecution => [reserved| $r] X)
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) =>
+      [reserved| $r] evts X)
 
   | `([expr| $t:dsl_term]) =>
-    `(fun X : CandidateExecution => [dsl-term| $t] X) -- environemnt identifiers ρ, introduced by commands.
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) => [dsl-term| $t] evts X)
 
 macro_rules
   | `([dsl-term| $i:ident]) =>
-    `(fun X : CandidateExecution => $i X) -- Apply the variable X to identifier, otherwise the type signature will has a extra type (CandidateExecution).
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) => $i evts X)
 
 macro_rules
   | `([reserved| $r:predefined_relations]) => `([predefined-relations| $r])
   | `([reserved| $e:predefined_events]) => `([predefined-events| $e])
 
+-- #check fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo (evts))] (X : CandidateExecution evts) =>
+--   X._rf
+
 macro_rules
-  | `([predefined-relations| fr]) => `(fun X : CandidateExecution => X._fr)
-  | `([predefined-relations| po]) => `(fun X : CandidateExecution => X._po)
-  | `([predefined-relations| rf]) => `(fun X : CandidateExecution => X._rf)
+  | `([predefined-relations| fr]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo (evts))] (X : CandidateExecution evts) =>
+      X._fr)
+
+  | `([predefined-relations| po]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo (evts))] (X : CandidateExecution evts) =>
+      X._po)
+
+  | `([predefined-relations| rf]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo (evts))] (X : CandidateExecution evts) =>
+      X._rf)
+
+  | `([predefined-relations| co]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo (evts))] (X : CandidateExecution evts) =>
+      CatRel.co.wellformed evts)
 
 macro_rules
   | `([predefined-events| W]) => `((X evts coConst).evts.W)
@@ -85,11 +102,10 @@ macro_rules
   | `([assertion| empty]) => `(IsEmpty)
 
 macro_rules
-  | `([annotable-events| W]) => `(fun X : CandidateExecution ↦ X.evts.W)
-  | `([annotable-events| R]) => `((X evts coConst).evts.R)
-  | `([annotable-events| B]) => `((X evts coConst).evts.B)
-  | `([annotable-events| F]) => `((X evts coConst).evts.F)
-  -- | `([annotable-events| W]) => `(λ E: CandidateExecution ↦ E.evts)
+  | `([annotable-events| W]) => `(fun X : CandidateExecution => X.evts.W)
+  | `([annotable-events| R]) => `(fun X : CandidateExecution => X.evts.R)
+  | `([annotable-events| B]) => `(fun X : CandidateExecution => X.evts.B)
+  | `([annotable-events| F]) => `(fun X : CandidateExecution => X.evts.F)
 
 macro_rules
   -- | `([predefined-events| ___]) => __ TODO!(figure all the definiations of all the events. (⋃?))
@@ -113,10 +129,18 @@ macro_rules
 
 postfix:61 "+" => Relation.TransGen
 
--- [model| test
---   let b = po
---   let c = po
---   let e = b | c
--- ]
+def a := [predefined-relations| po]
+def b := [predefined-relations| rf]
+def c := [predefined-relations| co]
+
+#check b
+
+[model| test
+  let b = po
+  let c = po
+  let e = b
+]
+
+#check test.b
 --
 -- #check test.e
