@@ -19,6 +19,18 @@ syntax "[reserved|" reserved "]" : term
 syntax "[predefined-relations|" predefined_relations "]" : term
 syntax "[dsl-term|" dsl_term "]" : term
 
+instance : Coe (TSyntax `cat_ident) (TSyntax `ident) where
+  -- Urgly hack.
+  coe s :=
+  if s.raw.getKind.getString! == "cat_ident_" then
+    ⟨s.raw.getArg 0⟩
+  else if s.raw.getKind.getString! == "cat_ident_-_" then
+    let l : TSyntax `ident := ⟨s.raw.getArg 0⟩
+    let r : TSyntax `ident := ⟨s.raw.getArg 2⟩
+    mkIdent (l.getId.toString ++ r.getId.toString).toName
+  else
+    panic! "Failed to converses the cat_ident to ident"
+
 macro_rules
   | `([expr| $e₁:expr | $e₂:expr]) =>
     `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo (evts))] (X : CandidateExecution evts) =>
@@ -53,15 +65,19 @@ macro_rules
 
 #check Ident
 
+-- macro_rules
+--   | `([cat-ident| $i:ident]) => `($i)
+--   | `([cat-ident| $i₁:ident-$i₂:ident]) =>
+--     let n₁ := i₁.getId
+--     let n₂ := i₂.getId
+--     let n := n₁.getString! ++ "_" ++ n₂.getString!
+--     let n := mkIdent n.toName
+--     `($n)
+
 macro_rules
-  | `([dsl-term| $i:ident]) =>
-    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) => $i evts X)
-  | `([dsl-term| $i₁:ident-$i₂:ident]) =>
-    let n₁ := i₁.getId
-    let n₂ := i₂.getId
-    let n := n₁.getString! ++ "_" ++ n₂.getString!
-    let n := mkIdent n.toName
-    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) => $n evts X)
+  | `([dsl-term| $i:cat_ident]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) =>
+      $i evts X)
 
 macro_rules
   | `([reserved| $r:predefined_relations]) => `([predefined-relations| $r])
@@ -136,13 +152,32 @@ macro_rules
 
   | `([predefined-events| $a:annotable_events]) => `([annotable-events| $a])
 
+
 macro_rules
   -- We just ignore the include inst.
   | `([inst| include $_filename:str]) => return mkNullNode
-  | `([inst| let $nm = $e]) => `(def $nm := [expr|$e])
-  | `([inst| $a:assertion $e as $nm]) =>
+  -- TODO(Don't know how the coe works here, maybe ask others? Like the coe works, okay, but how do I know it's value?)
+  | `([inst| let $nm:cat_ident = $e]) =>
+    `(def $nm := [expr|$e])
+  | `([inst| $a:assertion $e as $nm:cat_ident]) => do
+
+    dbg_trace <- `($nm)
+
+    match nm with
+    | t =>
+      let a := t.raw
+      dbg_trace a.getArgs
+      dbg_trace a.getKind.getString!
+      dbg_trace "failed to match"
+      dbg_trace t
+      pure ()
+
+    dbg_trace nm
+    dbg_trace a
+    dbg_trace e
+
     `(def $nm (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) : Prop
-    := [assertion| $a] ([expr| $e] evts X))
+      := [assertion| $a] ([expr| $e] evts X))
   -- | `([inst| (* $_ *)]) => `(#print "")
 
 macro_rules
@@ -151,25 +186,28 @@ macro_rules
     let nstart <- `(namespace $n)
     let nend <- `(end $n)
     let insts <- x.mapM (fun ins => `([inst| $ins]))
+
+    -- let insts : Array (TSyntax `command) := #[]
     let ret := #[nstart] ++ insts ++ #[nend]
     return mkNullNode ret
 
 postfix:61 "+" => Relation.TransGen
 
-def a := [predefined-relations| po]
-def b := [predefined-relations| rf]
-def c := [predefined-relations| co]
-
-#check b
-
-[model| test
-  let b = po
-  let c = po
-  let e = (po | po | po) & po
+[inst|
+  -- let e = (po | po | po) & po
+  acyclic po as new
 ]
 
-#reduce test.e
+#check new
+
+namespace t₁
+def a := 1
+end t₁
+
+#check t₁.a
 
 [inst| include "test"]
+
+[inst| let b-c = po]
 --
 -- #check test.e
