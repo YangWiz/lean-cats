@@ -1,10 +1,11 @@
 import Lean
 import LeanCats.Macro
 import LeanCats.Syntax
+import LeanCats.CatPreprocessor
 
 open Lean.Meta Lean Expr Elab Command Parser
 
-def eval_string (s : String) : Lean.Elab.Command.CommandElabM Unit := do
+def evalCat (s : String) : Lean.Elab.Command.CommandElabM Unit := do
   -- parse the string using the current environment
   let env: Lean.Environment <- Lean.getEnv
   let stx?: Except String Lean.Syntax := Lean.Parser.runParserCategory env `command s "<CatFile>"
@@ -21,12 +22,22 @@ def eval_string (s : String) : Lean.Elab.Command.CommandElabM Unit := do
     pure ()
   }
 
-elab "defcat" name:ident " := " "<" filename:str ">" : command => do
+-- According to lean 4 monad map: https://github.com/leanprover-community/mathlib4/wiki/Monad-map,
+-- we can call IO under the CommandM.
+elab "defcat" "<" filename:str ">" : command => do
+    let fn := Filename.mkName filename.getString
+    let path := "LeanCats/Cats/" ++ filename.getString
+    let s <- IO.FS.readFile path
+
+    let model := "[model| " ++ fn.toString ++ " " ++ s ++ "]"
+
+    println! model
+
     -- Add the declaration to the environment
-    eval_string "[model| sc let a = po]"
+    evalCat model
 
-defcat TSO := <"Cats/tso.cat">
+defcat <"tso-00.cat">
 
-#check sc.a
+#check tso.com
 
 #check _
