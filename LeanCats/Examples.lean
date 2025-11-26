@@ -10,7 +10,7 @@ namespace SC
 variable (evts : Data.Events)
 variable (coConst : IsStrictTotalOrder Event (preCo evts))
 
-@[simp] def X : CandidateExecution :=
+@[simp] def X : CandidateExecution evts :=
   {
     evts := evts
     _po := CatRel.po evts
@@ -40,7 +40,7 @@ namespace TSO01
 variable (evts : Events)
 variable (coConst : IsStrictTotalOrder Event (preCo evts))
 
-@[simp] def X : CandidateExecution :=
+@[simp] def X : CandidateExecution evts :=
   {
     evts := evts
     _po := CatRel.po evts
