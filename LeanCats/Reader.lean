@@ -28,13 +28,13 @@ elab "defcat" "<" filename:str ">" : command => do
     let fn := Filename.mkName filename.getString
     let path := "LeanCats/Cats/" ++ filename.getString
     let s <- IO.FS.readFile path
+    println! (removeComments s)
 
-    let model := "[model| " ++ fn.toString ++ " " ++ s ++ "]"
+    let model := "[model| " ++ fn.toString ++ " " ++ (removeComments s) ++ "]"
     -- Add the declaration to the environment
     evalCat model
 
-defcat <"tso-00.cat">
-
-#check tso.com
-
-#check _
+namespace Test
+  defcat <"tso.cat">
+  #check tso.tso
+end Test

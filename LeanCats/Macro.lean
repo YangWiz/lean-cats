@@ -85,6 +85,7 @@ macro_rules
 
 -- #check fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo (evts))] (X : CandidateExecution evts) =>
 --   X._rf
+#check CatRel.external
 
 macro_rules
   | `([predefined-relations| fr]) =>
@@ -98,6 +99,10 @@ macro_rules
   | `([predefined-relations| rf]) =>
     `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo (evts))] (X : CandidateExecution evts) =>
       X._rf)
+
+  | `([predefined-relations| rfe]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo (evts))] (X : CandidateExecution evts) =>
+      CatRel.external X.evts X._rf)
 
   | `([predefined-relations| co]) =>
     `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo (evts))] (X : CandidateExecution evts) =>
@@ -193,32 +198,34 @@ macro_rules
 
 postfix:61 "+" => Relation.TransGen
 
-[inst|
-  -- let e = (po | po | po) & po
-  acyclic po as new-ct
-]
-
-#reduce [dsl-term| new-ct]
-#check new_ct
-
-[model| tso
-  include "cos.cat"
-
-  let com-tso = rf | co | fr
-  let po1-tso = po & (W*W | R*M)
-
-  let ghb = po1-tso | com-tso
-  acyclic ghb as c
-]
-
-namespace t₁
-def a := 1
-end t₁
-
-#check t₁.a
-
-[inst| include "test"]
-
-[inst| let b-c = po]
+section Test
+--  [inst|
+--    -- let e = (po | po | po) & po
+--    acyclic po as new-ct
+--  ]
 --
--- #check test.e
+--  #reduce [dsl-term| new-ct]
+--  #check new_ct
+--
+--  [model| tso
+--    include "cos.cat"
+--
+--    let com-tso = rf | co | fr
+--    let po1-tso = po & (W*W | R*M)
+--
+--    let ghb = po1-tso | com-tso
+--    acyclic ghb as c
+--  ]
+--
+--  namespace t₁
+--  def a := 1
+--  end t₁
+--
+--  #check t₁.a
+--
+--  [inst| include "test"]
+--
+--  [inst| let b-c = po]
+--  --
+--  -- #check test.e
+end Test

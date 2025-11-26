@@ -14,8 +14,9 @@ declare_syntax_cat constraint
 declare_syntax_cat annotable_events
 declare_syntax_cat predefined_events
 declare_syntax_cat predefined_relations
+declare_syntax_cat cat_ident
 
-syntax reserved : expr
+syntax reserved:41 : expr
 syntax primitive : reserved
 syntax keyword : reserved
 syntax name : reserved
@@ -75,6 +76,7 @@ syntax annotable_events : predefined_events
 /- defined_relations: -/
 syntax "O" : predefined_relations -- empty relation
 syntax "rf" : predefined_relations -- read from
+syntax "rfe" : predefined_relations -- read from external
 syntax "fr" : predefined_relations -- from read
 syntax "co" : predefined_relations -- from read
 syntax "id" : predefined_relations -- identity
@@ -85,11 +87,13 @@ syntax "rmw" : predefined_relations -- read-modify-write
 
 syntax keyword : dsl_term
 syntax num : dsl_term
-syntax ident : dsl_term
-syntax ident"-"ident : dsl_term
 syntax "(" expr ")" : dsl_term
+syntax cat_ident : dsl_term
 
-syntax dsl_term : expr
+syntax ident : cat_ident
+syntax ident"-"ident : cat_ident
+
+syntax dsl_term:51 : expr
 
 syntax:51 expr:51 "|" expr:50 : expr
 syntax expr "&" expr : expr
@@ -100,8 +104,8 @@ syntax expr "+" expr : expr
 syntax expr "-" expr : expr
 syntax:71 expr "^-1" : expr
 
-syntax assertion expr ("as" ident)? : inst
-syntax "let" ident "=" expr : inst
+syntax assertion expr ("as" cat_ident)? : inst
+syntax "let" cat_ident "=" expr : inst
 
 syntax "(*" ident* "*)" : inst
 syntax "include" str : inst
