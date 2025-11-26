@@ -30,9 +30,6 @@ elab "defcat" "<" filename:str ">" : command => do
     let s <- IO.FS.readFile path
 
     let model := "[model| " ++ fn.toString ++ " " ++ s ++ "]"
-
-    println! model
-
     -- Add the declaration to the environment
     evalCat model
 
