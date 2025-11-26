@@ -27,9 +27,9 @@ instance : Coe (TSyntax `cat_ident) (TSyntax `ident) where
   else if s.raw.getKind.getString! == "cat_ident_-_" then
     let l : TSyntax `ident := ⟨s.raw.getArg 0⟩
     let r : TSyntax `ident := ⟨s.raw.getArg 2⟩
-    mkIdent (l.getId.toString ++ r.getId.toString).toName
+    mkIdent (l.getId.toString ++ "_" ++ r.getId.toString).toName
   else
-    panic! "Failed to converses the cat_ident to ident"
+    panic! "Failed to converse the cat_ident to ident"
 
 macro_rules
   | `([expr| $e₁:expr | $e₂:expr]) =>
@@ -195,10 +195,21 @@ postfix:61 "+" => Relation.TransGen
 
 [inst|
   -- let e = (po | po | po) & po
-  acyclic po as new
+  acyclic po as new-ct
 ]
 
-#check new
+#reduce [dsl-term| new-ct]
+#check new_ct
+
+[model| tso
+  include "cos.cat"
+
+  let com-tso = rf | co | fr
+  let po1-tso = po & (W*W | R*M)
+
+  let ghb = po1-tso | com-tso
+  acyclic ghb as c
+]
 
 namespace t₁
 def a := 1
