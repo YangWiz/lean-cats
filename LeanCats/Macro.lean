@@ -51,9 +51,17 @@ macro_rules
     `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) =>
       [dsl-term| $t] evts X)
 
+#check Ident
+
 macro_rules
   | `([dsl-term| $i:ident]) =>
     `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) => $i evts X)
+  | `([dsl-term| $i₁:ident-$i₂:ident]) =>
+    let n₁ := i₁.getId
+    let n₂ := i₂.getId
+    let n := n₁.getString! ++ "_" ++ n₂.getString!
+    let n := mkIdent n.toName
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) => $n evts X)
 
 macro_rules
   | `([reserved| $r:predefined_relations]) => `([predefined-relations| $r])
