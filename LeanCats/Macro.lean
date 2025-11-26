@@ -129,6 +129,8 @@ macro_rules
   | `([predefined-events| $a:annotable_events]) => `([annotable-events| $a])
 
 macro_rules
+  -- We just ignore the include inst.
+  | `([inst| include $_filename:str]) => return mkNullNode
   | `([inst| let $nm = $e]) => `(def $nm := [expr|$e])
   | `([inst| $a:assertion $e as $nm]) =>
     `(def $nm (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) : Prop
@@ -159,5 +161,7 @@ def c := [predefined-relations| co]
 ]
 
 #reduce test.e
+
+[inst| include "test"]
 --
 -- #check test.e
