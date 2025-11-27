@@ -2,66 +2,98 @@ import LeanCats.Syntax
 import Lean
 import LeanCats.Relations
 import LeanCats.Data
+import LeanCats.Basic
 
-namespace CatSemantics
-open Lean Elab Command
+open Lean Elab Command Term Meta
 open Data
 
-variable (evts : Events)
-variable (co : Events -> Rel Event Event)
+syntax "[model|" ident inst* "]" : command
+syntax "[expr|" expr "]" : term
+syntax "[keyword|" keyword "]" : term
+syntax "[assertion|" assertion "]" : term
 
-def X : CandidateExecution :=
-  {
-    evts := evts
-    po := Rel.po evts
-    fr := Rel.fr evts co
-    rf := Rel.rf evts
-    IW := evts.IW
-  }
+syntax "[inst|" inst "]" : command
+syntax "[annotable-events|" annotable_events "]" : term -- Set
+syntax "[predefined-events|" predefined_events "]" : term
+syntax "[reserved|" reserved "]" : term
+syntax "[predefined-relations|" predefined_relations "]" : term
+syntax "[dsl-term|" dsl_term "]" : term
 
-open CatGrammar
-scoped syntax "[expr|" expr "]" : term
-scoped syntax "[keyword|" keyword "]" : term
-scoped syntax "[assertion|" assertion "]" : term
+instance : Coe (TSyntax `cat_ident) (TSyntax `ident) where
+  -- Urgly hack.
+  coe s :=
+  if s.raw.getKind.getString! == "cat_ident_" then
+    ⟨s.raw.getArg 0⟩
+  else if s.raw.getKind.getString! == "cat_ident_-_" then
+    let l : TSyntax `ident := ⟨s.raw.getArg 0⟩
+    let r : TSyntax `ident := ⟨s.raw.getArg 2⟩
+    mkIdent (l.getId.toString ++ "_" ++ r.getId.toString).toName
+  else
+    panic! "Failed to converse the cat_ident to ident"
 
-scoped syntax "[inst|" inst "]" : command
-scoped syntax "[model|" ident command* "]" : command
-scoped syntax "[commands|" command* "]" : command
-scoped syntax "[annotable-events|" annotable_events "]" : term -- Set
-scoped syntax "[predefined-events|" predefined_events "]" : term
-scoped syntax "[reserved|" reserved "]" : term
-scoped syntax "[predefined-relations|" predefined_relations "]" : term
-scoped syntax "[dsl-term|" dsl_term "]" : term
+macro_rules
+  | `([expr| $e₁:expr | $e₂:expr]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo (evts))] (X : CandidateExecution evts) =>
+      CatRel.union ([expr| $e₁] evts X) ([expr| $e₂] evts X))
 
-scoped macro_rules
-  | `([model| $n:ident $cmds:command*]) => `(namespace $n [commands| $cmds*] end $n)
+  | `([expr| $e₁:expr & $e₂:expr]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo (evts))] (X : CandidateExecution evts) =>
+      CatRel.inter ([expr| $e₁] evts X) ([expr| $e₂] evts X))
 
+  | `([expr| $e₁:expr ; $e₂:expr]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo (evts))] (X : CandidateExecution evts) =>
+      Rel.comp ([expr| $e₁] evts X) ([expr| $e₂] evts X))
 
-scoped macro_rules
-  | `([expr| $e₁:expr | $e₂:expr]) => `(CatRel.union [expr| $e₁] [expr| $e₂])
-  | `([expr| $e₁:expr & $e₂:expr]) => `(CatRel.inter [expr| $e₁] [expr| $e₂])
-  | `([expr| $e₁:expr ; $e₂:expr]) => `(Rel.comp [expr| $e₁] [expr| $e₂])
-  | `([expr| $e₁:expr * $e₂:expr]) => `(Set.prod [expr| $e₁] [expr| $e₂])
-  | `([expr| $e^-1]) => `(Rel.inv [expr| $e])
-  | `([expr| $r:reserved]) => `([reserved| $r])
-  | `([expr| $t:dsl_term]) => `([dsl-term| $t]) -- environemnt identifiers ρ, introduced by commands.
+  | `([expr| $e₁:expr * $e₂:expr]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo (evts))] (X : CandidateExecution evts) =>
+      CatRel.prod ([expr| $e₁] evts X) ([expr| $e₂] evts X))
 
-scoped macro_rules
-  | `([dsl-term| $i:ident]) => `($i evts co) -- Apply the variable X to identifier, otherwise the type signature will has a extra type (CandidateExecution).
+  | `([expr| $e^-1]) =>
+    `(fun X : CandidateExecution => Rel.inv ([expr| $e] X))
 
-scoped macro_rules
+  | `([expr| $r:reserved]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) =>
+      [reserved| $r] evts X)
+
+  | `([expr| ($e:expr)]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) =>
+      [expr| $e] evts X)
+
+  | `([expr| $t:dsl_term]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) =>
+      [dsl-term| $t] evts X)
+
+macro_rules
+  | `([dsl-term| $i:cat_ident]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) =>
+      $i evts X)
+
+macro_rules
   | `([reserved| $r:predefined_relations]) => `([predefined-relations| $r])
   | `([reserved| $e:predefined_events]) => `([predefined-events| $e])
 
-scoped macro_rules
-  | `([predefined-relations| fr]) => `((X evts co).fr)
-  | `([predefined-relations| po]) => `((X evts co).po)
-  | `([predefined-relations| rf]) => `((X evts co).rf)
+macro_rules
+  | `([predefined-relations| fr]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo (evts))] (X : CandidateExecution evts) =>
+      X._fr)
 
-scoped macro_rules
-  | `([predefined-events| W]) => `((X evts co).evts.W)
+  | `([predefined-relations| po]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo (evts))] (X : CandidateExecution evts) =>
+      X._po)
 
-scoped macro_rules
+  | `([predefined-relations| rf]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo (evts))] (X : CandidateExecution evts) =>
+      X._rf)
+
+  | `([predefined-relations| rfe]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo (evts))] (X : CandidateExecution evts) =>
+      CatRel.external X.evts X._rf)
+
+  | `([predefined-relations| co]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo (evts))] (X : CandidateExecution evts) =>
+      CatRel.co.wellformed evts)
+
+macro_rules
   | `([keyword| and]) => Lean.Macro.throwUnsupported
   | `([keyword| as]) => Lean.Macro.throwUnsupported
   | `([keyword| begin]) => Lean.Macro.throwUnsupported
@@ -83,53 +115,56 @@ scoped macro_rules
   | `([keyword| with]) => Lean.Macro.throwUnsupported
   | `([keyword| $a:assertion]) => `([assertion| $a])
 
-scoped macro_rules
-  | `([assertion| irreflexive]) => `(Irreflexive)
-  | `([assertion| acyclic]) => `(Acyclic)
-  | `([assertion| empty]) => `(IsEmpty)
+macro_rules
+  | `([assertion| irreflexive]) => `(CatRel.Irreflexive)
+  | `([assertion| acyclic]) => `(CatRel.Acyclic)
+  | `([assertion| empty]) => `(CatRel.IsEmpty)
 
-scoped macro_rules
-  | `([annotable-events| W]) => `((X evts co).evts.W)
-  | `([annotable-events| R]) => `((X evts co).evts.R)
-  | `([annotable-events| B]) => `((X evts co).evts.B)
-  | `([annotable-events| F]) => `((X evts co).evts.F)
-  -- | `([annotable-events| W]) => `(λ E: CandidateExecution ↦ E.evts)
+macro_rules
+  | `([annotable-events| W]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts)
+      => X.evts.W)
+  | `([annotable-events| R]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts)
+      => X.evts.R)
+  | `([annotable-events| B]) => `(fun X : CandidateExecution => X.evts.B)
+  | `([annotable-events| F]) => `(fun X : CandidateExecution => X.evts.F)
 
-scoped macro_rules
+macro_rules
   -- | `([predefined-events| ___]) => __ TODO!(figure all the definiations of all the events. (⋃?))
-  | `([predefined-events| IW]) => `(λ E: CandidateExecution ↦ E.evts.IW)
-  | `([predefined-events| M]) => `(λ E: CandidateExecution ↦ E.evts.W ∪ E.evts.R)
+  | `([predefined-events| IW]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts)
+      => X.evts.IW)
+
+  | `([predefined-events| M]) =>
+    `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts)
+      => X.evts.W ∪ X.evts.R)
+
   | `([predefined-events| $a:annotable_events]) => `([annotable-events| $a])
 
-scoped macro_rules
-  | `([inst| let $nm = $e]) => `(def $nm := [expr|$e])
-  | `([inst| $a:assertion $e as $nm]) => `(def $nm : Prop := [assertion| $a] [expr| $e])
+
+macro_rules
+  -- We just ignore the include inst.
+  | `([inst| include $_filename:str]) => return mkNullNode
+
+  -- TODO(Don't know how the coe works here, maybe ask others? Like the coe works, okay, but how do I know it's value?)
+  | `([inst| let $nm:cat_ident = $e]) =>
+    `(@[simp] def $nm := [expr|$e])
+
+  | `([inst| $a:assertion $e as $nm:cat_ident]) => do
+    `(@[simp] def $nm (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) : Prop
+      := [assertion| $a] ([expr| $e] evts X))
   -- | `([inst| (* $_ *)]) => `(#print "")
 
--- The value of expr 2 must be a set of values S and the operator returns the set S augmented with the value of expr 1.
--- The cat specification didn't give us the precedence, so we use the Ocaml as the reference.
-scoped infixl:61 " ++ " => Set.insert
+macro_rules
+  -- Create the model.
+  | `([model| $n:ident $x:inst*]) => do
+    let nstart <- `(namespace $n)
+    let nend <- `(end $n)
+    let insts <- x.mapM (fun ins => `([inst| $ins]))
 
-scoped infixl:61 " * " => Set.prod
+    -- let insts : Array (TSyntax `command) := #[]
+    let ret := #[nstart] ++ insts ++ #[nend]
+    return mkNullNode ret
 
-scoped infixl:61 " | " => Set.union
-
-scoped infixl:61 " & " => Set.inter
-
-scoped infixl:61 " ; " => Rel.comp
-
-scoped infixl:61 " ∪ " => CatRel.union
-
-scoped postfix:61 "*" => Relation.ReflTransGen
-
--- The macro is bidirective (from left to right and from right to left).
-scoped postfix:61 "+" => Relation.TransGen
-
-[inst| let poo = W*W]
-[inst| let ghb = po]
-
-#check ghb
-
-#check [predefined-relations| fr]
-
-end CatSemantics
+postfix:61 "+" => Relation.TransGen

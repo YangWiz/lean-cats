@@ -1,6 +1,7 @@
 import LeanCats.Data
 import LeanCats.Relations
-import LeanCats.Theoriems
+import LeanCats.Theorems
+import LeanCats.Basic
 
 open CatRel
 open Data
@@ -9,13 +10,13 @@ namespace SC
 variable (evts : Data.Events)
 variable (coConst : IsStrictTotalOrder Event (preCo evts))
 
-@[simp] def X [IsStrictTotalOrder Event (preCo evts)] : Data.CandidateExecution :=
+@[simp] def X : CandidateExecution evts :=
   {
     evts := evts
-    po := CatRel.po evts
-    fr := CatRel.fr evts
-    rf := CatRel.rf.wellformed evts
-    IW := evts.IW
+    _po := CatRel.po evts
+    _fr := CatRel.fr evts
+    _rf := CatRel.rf.wellformed evts
+    _IW := evts.IW
   }
 
 /-! ### SC (Sequential Consistency) model reperesentation in Lean 4.
@@ -25,10 +26,10 @@ and the operations of each individual thread appear in this sequence in the orde
 specified by its program.-/
 
 -- We define the communication between threads as com:
-@[simp] def com := (X evts).rf ∪ ((co.wellformed evts) ∪ (X evts).fr)
+@[simp] def com := (X evts coConst)._rf ∪ ((co.wellformed evts) ∪ (X evts coConst)._fr)
 
 -- Then we union it with the po, the SC ensures that every instructions are executed in program order.
-@[simp] def sc := (com evts coConst) ∪ ((X evts).po)
+@[simp] def sc := (com evts coConst) ∪ ((X evts coConst)._po)
 
 -- We should avoid the cyclic, because the fr in a ghb will leads a overwritten that violates the program order.
 @[simp] def assert := Acyclic (sc evts coConst)
@@ -39,23 +40,23 @@ namespace TSO01
 variable (evts : Events)
 variable (coConst : IsStrictTotalOrder Event (preCo evts))
 
-@[simp] def X : CandidateExecution :=
+@[simp] def X : CandidateExecution evts :=
   {
     evts := evts
-    po := CatRel.po evts
-    fr := CatRel.fr evts
-    rf := CatRel.rf.wellformed evts
-    IW := evts.IW
+    _po := CatRel.po evts
+    _fr := CatRel.fr evts
+    _rf := CatRel.rf.wellformed evts
+    _IW := evts.IW
   }
 
 /-! ### SC (Sequential Consistency) model reperesentation in Lean 4.
 A TSO is a memory model that allows the write read out of order in the same thread (write buffer).-/
 
 -- We define the communication between threads as com as in SC:
-@[simp] def com := (external evts ∩ (X evts coConst).rf) ∪ (co.wellformed evts ∪ ((X evts coConst).fr))
+@[simp] def com := (external evts ∩ (X evts coConst)._rf) ∪ (co.wellformed evts ∪ ((X evts coConst)._fr))
 
 -- Then we minus the internal read from and W*R from the po, because we allow them to be out of order.
-@[simp] def po_tso := (X evts coConst).po ∩ ((prod W W) ∪ (prod R M))
+@[simp] def po_tso := (X evts coConst)._po ∩ ((prod W W) ∪ (prod R M))
 
 @[simp] def ghb := (po_tso evts coConst) ∪ (com evts coConst)
 
@@ -68,8 +69,13 @@ end TSO01
 -- Which means sc imples tso, the sc is stronger.
 -- In this case, if we find the ghb is acyclic then tso must also be acyclic because sc models more edges.
 
+#check SC.assert
+
 -- https://leanprover-community.github.io/mathlib4_docs/Mathlib/Order/Defs/Unbundled.html#IsIrrefl
-theorem scvtso (evts : Data.Events) [coConst : IsStrictTotalOrder Event (preCo evts)] : SC.assert evts coConst → TSO01.assert evts coConst :=
+theorem scvtso
+  (evts : Data.Events)
+  [coConst : IsStrictTotalOrder Event (preCo evts)]
+  : SC.assert evts coConst → TSO01.assert evts coConst :=
 by
   simp
   intro sc

@@ -24,11 +24,23 @@ instance : Inter (Rel Event Event) := ⟨inter⟩
 @[simp] def M : Set Event :=
   R ∪ W
 
-@[simp] def Rel.prod (lhs rhs : List Event -> Event -> Prop) (E : List Event) (e₁ e₂ : Event) : Prop :=
-  lhs E e₁ ∧ rhs E e₂
-
-@[simp] def Rel.prod' (lhs rhs : Event -> Prop) : Rel Event Event :=
+@[simp] def Rel.prod (lhs rhs : Event -> Prop) : Rel Event Event :=
   λ e₁ e₂ ↦ lhs e₁ ∧ rhs e₂
+
+theorem RelProdIsSetProd (s₁ s₂ : Event -> Prop) (e₁ e₂ : Event) :
+  Rel.prod s₁ s₂ e₁ e₂ = ((e₁, e₂) ∈ Set.prod s₁ s₂) :=
+  by
+    simp
+    apply Iff.intro
+    {
+      intro hrel
+      unfold Set.prod
+      aesop
+    }
+    {
+      intro hset
+      aesop
+    }
 
 abbrev Acyclic (r : Rel Event Event) := ∀a : Event, ¬ Relation.TransGen r a a
 
@@ -37,9 +49,6 @@ abbrev Acyclic (r : Rel Event Event) := ∀a : Event, ¬ Relation.TransGen r a a
 
 @[simp] def Rel.external (e₁ e₂ : Event) : Prop :=
   ¬ (Rel.internal e₁ e₂)
-
-@[simp] def Rel.ident (X : CandidateExecution) (e₁ e₂ : Event) : Prop :=
-  e₁ = e₂ -- ∧ e₁ ∈ X.evts
 
 @[simp] def Rel.empty (_ _ : Event) : Prop :=
   False
@@ -142,5 +151,7 @@ def com
   [IsStrictTotalOrder Event (preCo evts)]
   (e₁ e₂ : Event) :=
   rf.wellformed evts e₁ e₂ ∨ co.wellformed evts e₁ e₂ ∨ fr evts e₁ e₂
+
+#check Rel.prod
 
 end CatRel

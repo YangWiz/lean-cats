@@ -1,7 +1,0 @@
-include "cos.cat"
-
-let com = rf | co | fr
-let poo = po & (W*W | R*M)
-
-let ghb = po | com
-acyclic ghb
