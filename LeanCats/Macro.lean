@@ -63,17 +63,6 @@ macro_rules
     `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) =>
       [dsl-term| $t] evts X)
 
-#check Ident
-
--- macro_rules
---   | `([cat-ident| $i:ident]) => `($i)
---   | `([cat-ident| $i₁:ident-$i₂:ident]) =>
---     let n₁ := i₁.getId
---     let n₂ := i₂.getId
---     let n := n₁.getString! ++ "_" ++ n₂.getString!
---     let n := mkIdent n.toName
---     `($n)
-
 macro_rules
   | `([dsl-term| $i:cat_ident]) =>
     `(fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) =>
@@ -82,10 +71,6 @@ macro_rules
 macro_rules
   | `([reserved| $r:predefined_relations]) => `([predefined-relations| $r])
   | `([reserved| $e:predefined_events]) => `([predefined-events| $e])
-
--- #check fun (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo (evts))] (X : CandidateExecution evts) =>
---   X._rf
-#check CatRel.external
 
 macro_rules
   | `([predefined-relations| fr]) =>
@@ -183,35 +168,3 @@ macro_rules
     return mkNullNode ret
 
 postfix:61 "+" => Relation.TransGen
-
-section Test
---  [inst|
---    -- let e = (po | po | po) & po
---    acyclic po as new-ct
---  ]
---
---  #reduce [dsl-term| new-ct]
---  #check new_ct
---
---  [model| tso
---    include "cos.cat"
---
---    let com-tso = rf | co | fr
---    let po1-tso = po & (W*W | R*M)
---
---    let ghb = po1-tso | com-tso
---    acyclic ghb as c
---  ]
---
---  namespace t₁
---  def a := 1
---  end t₁
---
---  #check t₁.a
---
---  [inst| include "test"]
---
---  [inst| let b-c = po]
---  --
---  -- #check test.e
-end Test
