@@ -2,7 +2,7 @@ import LeanCats.Macro
 import LeanCats.Reader
 import LeanCats.Data
 import LeanCats.Relations
-import LeanCats.Theoriems
+import LeanCats.Theorems
 import LeanCats.Basic
 
 defcat <"tso.cat">
