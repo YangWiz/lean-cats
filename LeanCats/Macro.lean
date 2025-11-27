@@ -161,27 +161,13 @@ macro_rules
 macro_rules
   -- We just ignore the include inst.
   | `([inst| include $_filename:str]) => return mkNullNode
+
   -- TODO(Don't know how the coe works here, maybe ask others? Like the coe works, okay, but how do I know it's value?)
   | `([inst| let $nm:cat_ident = $e]) =>
-    `(def $nm := [expr|$e])
+    `(@[simp] def $nm := [expr|$e])
+
   | `([inst| $a:assertion $e as $nm:cat_ident]) => do
-
-    dbg_trace <- `($nm)
-
-    match nm with
-    | t =>
-      let a := t.raw
-      dbg_trace a.getArgs
-      dbg_trace a.getKind.getString!
-      dbg_trace "failed to match"
-      dbg_trace t
-      pure ()
-
-    dbg_trace nm
-    dbg_trace a
-    dbg_trace e
-
-    `(def $nm (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) : Prop
+    `(@[simp] def $nm (evts : Events) [IsStrictTotalOrder Event (CatRel.preCo evts)] (X : CandidateExecution evts) : Prop
       := [assertion| $a] ([expr| $e] evts X))
   -- | `([inst| (* $_ *)]) => `(#print "")
 
